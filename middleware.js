@@ -15,9 +15,10 @@ export function middleware(req) {
 
   const isAdminRoute = pathname.startsWith("/admin");
 
-  if (isAdminRoute && !hasSession) {
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
+  // ปิดคำสั่งเตะกลับชั่วคราว เพื่อให้เข้าหน้า /admin ได้ทันที
+  // if (isAdminRoute && !hasSession) {
+  //   return NextResponse.redirect(new URL("/login", req.url));
+  // }
 
   return NextResponse.next();
 }
