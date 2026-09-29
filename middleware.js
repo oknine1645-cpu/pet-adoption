@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 
 export function middleware(req) {
   const { pathname } = req.nextUrl;
-  const cookies = req.cookies.getAll();
 
-  // ตรวจหาคุกกี้ชื่อ baanpakjai_session ให้ตรงกับ auth.js
+  // ถ้าเปิดเข้าหน้าแรกสุด (/) ให้ส่งไปหน้า /login ทันที
+  if (pathname === "/") {
+    return NextResponse.redirect(new URL("/login", req.url));
+  }
+
+  const cookies = req.cookies.getAll();
   const hasSession = cookies.some(
     (c) =>
       c.name.includes("baanpakjai_session") ||
@@ -13,16 +17,9 @@ export function middleware(req) {
       c.name === "__Secure-authjs.session-token"
   );
 
-  const isAdminRoute = pathname.startsWith("/admin");
-
-  // ปิดคำสั่งเตะกลับชั่วคราว เพื่อให้เข้าหน้า /admin ได้ทันที
-  // if (isAdminRoute && !hasSession) {
-  //   return NextResponse.redirect(new URL("/login", req.url));
-  // }
-
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*"],
+  matcher: ["/", "/admin", "/admin/:path*"],
 };
