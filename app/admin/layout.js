@@ -1,19 +1,12 @@
 import { auth } from "@/auth";
-import { redirect } from "next/navigation";
 
 export default async function AdminLayout({ children }) {
+  // อ่าน session ตามปกติ แต่ไม่สั่ง redirect บล็อกการเข้าใช้งาน
   let session = null;
-
   try {
     session = await auth();
   } catch (err) {
-    // หากมีปัญหาเรื่องการอ่านคุกกี้ ให้ส่งไปหน้าล็อกอินทันที ไม่แสดงหน้าจอ Error
-    redirect("/login");
-  }
-
-  // หากไม่ได้ล็อกอิน หรือสิทธิ์ไม่ใช่ ADMIN ให้ส่งไปหน้าแรก
-  if (!session?.user || session.user.role !== "ADMIN") {
-    redirect("/login");
+    console.error("AdminLayout Session Error:", err);
   }
 
   return <>{children}</>;
