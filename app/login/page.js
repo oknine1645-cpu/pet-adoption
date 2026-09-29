@@ -55,7 +55,7 @@ function LoginForm() {
     try {
       await signIn("google", {
         redirectTo: "/admin",
-        callbackUrl: "/admin",
+        callbackUrl: "/",
       });
     } catch (err) {
       console.error("Google Login Error:", err);
