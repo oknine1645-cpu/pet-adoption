@@ -6,12 +6,12 @@ export function middleware(req) {
 
   // ตรวจหาคุกกี้ baanpakjai_session
   const hasSession = cookies.some(
-    (c) =>
-      c.name.includes("baanpakjai_session") ||
-      c.name.includes("session-token") ||
-      c.name === "authjs.session-token" ||
-      c.name === "__Secure-authjs.session-token"
-  );
+  (c) =>
+    c.name.includes("baanpakjai_session") ||
+    c.name.includes("session-token") ||
+    c.name === "authjs.session-token" ||
+    c.name === "__Secure-authjs.session-token"
+);
 
   const isAdminRoute = pathname.startsWith("/admin");
 
