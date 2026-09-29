@@ -9,7 +9,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
   secret: process.env.AUTH_SECRET || "baanpakjai-secret-key-production-32chars",
   
-  // จุดสำคัญ: เปลี่ยนชื่อคุกกี้ใหม่ เพื่อตัดขาดจากคุกกี้เก่าที่ถอดรหัสไม่ผ่าน
   cookies: {
     sessionToken: {
       name: "baanpakjai_session",
@@ -26,10 +25,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     signIn: "/login",
     error: "/login",
   },
+
   providers: [
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      authorization: {
+        params: {
+          prompt: "select_account",
+          access_type: "offline",
+          response_type: "code",
+        },
+      },
     }),
     Credentials({
       name: "Credentials",
@@ -58,6 +65,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
+
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "google") {

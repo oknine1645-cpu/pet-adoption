@@ -1,14 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function LoginPage() {
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const urlError = searchParams.get("error");
+
   const [form, setForm] = useState({ email: "", password: "" });
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    urlError === "CredentialsSignin"
+      ? "อีเมลหรือรหัสผ่านไม่ถูกต้อง"
+      : urlError
+      ? "เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง"
+      : ""
+  );
   const [loading, setLoading] = useState(false);
 
+  // เข้าสู่ระบบด้วย Email / Password
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
@@ -21,16 +32,34 @@ export default function LoginPage() {
         password: form.password,
       });
 
-      if (res?.error) {
+      // ดักกรณีรหัสผ่านผิด หรือฐานข้อมูลไม่พบบัญชี
+      if (!res || res.error || res.ok === false) {
         setError("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
         setLoading(false);
         return;
       }
 
-      window.location.replace("/admin");
+      // เข้าสู่ระบบสำเร็จ พาไปหน้า /admin
+      window.location.href = "/admin";
     } catch (err) {
       console.error("Login Error:", err);
       setError("เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
+      setLoading(false);
+    }
+  }
+
+  // เข้าสู่ระบบด้วย Google
+  async function handleGoogleLogin() {
+    setLoading(true);
+    setError("");
+    try {
+      await signIn("google", {
+        redirectTo: "/admin",
+        callbackUrl: "/admin",
+      });
+    } catch (err) {
+      console.error("Google Login Error:", err);
+      setError("ไม่สามารถเข้าสู่ระบบด้วย Google ได้");
       setLoading(false);
     }
   }
@@ -92,7 +121,7 @@ export default function LoginPage() {
         <button
           type="button"
           disabled={loading}
-          onClick={() => signIn("google", { callbackUrl: "/admin" })}
+          onClick={handleGoogleLogin}
           style={{ width: "100%", padding: "11px 14px", background: "#ffffff", border: "1.5px solid #cbd5e1", borderRadius: 10, fontSize: 14, fontWeight: 600, color: "#334155", cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24">
@@ -109,5 +138,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }
