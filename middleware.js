@@ -4,7 +4,7 @@ export function middleware(req) {
   const { pathname } = req.nextUrl;
   const cookies = req.cookies.getAll();
 
-  // ตรวจหาคุกกี้ชื่อ baanpakjai_session หรือ session-token
+  // ตรวจหาคุกกี้ baanpakjai_session
   const hasSession = cookies.some(
     (c) =>
       c.name.includes("baanpakjai_session") ||
