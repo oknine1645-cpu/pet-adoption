@@ -39,8 +39,8 @@ function LoginForm() {
         return;
       }
 
-      // เข้าสู่ระบบสำเร็จ พาไปหน้า /admin
-      window.location.href = "/admin";
+      // เข้าสู่ระบบสำเร็จ พาไปหน้าหลัก (/)
+      window.location.href = "/";
     } catch (err) {
       console.error("Login Error:", err);
       setError("เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
@@ -54,7 +54,6 @@ function LoginForm() {
     setError("");
     try {
       await signIn("google", {
-        redirectTo: "/admin",
         callbackUrl: "/",
       });
     } catch (err) {
