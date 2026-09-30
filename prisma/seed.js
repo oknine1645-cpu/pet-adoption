@@ -17,11 +17,11 @@ async function main() {
     typeMap[name] = type.id;
   }
 
-  // 2. รายการสัตว์เลี้ยงตัวอย่างครบทุกประเภทและสถานะ
+  // 2. รายการสัตว์เลี้ยงตัวอย่างครบทุกประเภทและสถานะ (เปลี่ยนเป็น petTypeId เรียบร้อย)
   const samplePets = [
     {
       name: "น้องไข่ตุ๋น",
-      typeId: typeMap["แมว"],
+      petTypeId: typeMap["แมว"],
       breed: "ไทยวิเชียรมาศ",
       ageMonths: 5,
       gender: "FEMALE",
@@ -31,7 +31,7 @@ async function main() {
     },
     {
       name: "เจ้าเฉาก๊วย",
-      typeId: typeMap["สุนัข"],
+      petTypeId: typeMap["สุนัข"],
       breed: "ไทยหลังอานผสม",
       ageMonths: 8,
       gender: "MALE",
@@ -41,7 +41,7 @@ async function main() {
     },
     {
       name: "น้องส้มหยุด",
-      typeId: typeMap["แมว"],
+      petTypeId: typeMap["แมว"],
       breed: "แมวส้ม",
       ageMonths: 1, // อายุต่ำกว่า 2 เดือน (สำหรับทดสอบป้ายเตือนกฎธุรกิจ)
       gender: "MALE",
@@ -51,7 +51,7 @@ async function main() {
     },
     {
       name: "น้องปุยฝ้าย",
-      typeId: typeMap["กระต่าย"],
+      petTypeId: typeMap["กระต่าย"],
       breed: "ฮอลแลนด์ลอป (Holland Lop)",
       ageMonths: 4,
       gender: "FEMALE",
@@ -61,7 +61,7 @@ async function main() {
     },
     {
       name: "น้องบลูสกาย",
-      typeId: typeMap["นก"],
+      petTypeId: typeMap["นก"],
       breed: "นกหงส์หยก",
       ageMonths: 6,
       gender: "MALE",
@@ -71,7 +71,7 @@ async function main() {
     },
     {
       name: "น้องโมจิ",
-      typeId: typeMap["หนูแฮมสเตอร์"],
+      petTypeId: typeMap["หนูแฮมสเตอร์"],
       breed: "วินเทอร์ไวท์",
       ageMonths: 3,
       gender: "FEMALE",
@@ -81,7 +81,7 @@ async function main() {
     },
     {
       name: "พี่นำโชค",
-      typeId: typeMap["สุนัข"],
+      petTypeId: typeMap["สุนัข"],
       breed: "โกลเด้นผสม",
       ageMonths: 14,
       gender: "MALE",
@@ -90,6 +90,13 @@ async function main() {
       description: "นิสัยเรียบร้อยมาก ผ่านการฝึกพื้นฐานแล้ว ปัจจุบันได้บ้านใหม่ที่อบอุ่นเรียบร้อย",
     },
   ];
+
+  // ป้องกันไม่ให้ใส่สัตว์ตัวอย่างบน production และไม่ให้สร้างซ้ำหากมีข้อมูลอยู่แล้ว
+  const isProd = process.env.NODE_ENV === "production";
+  if ((isProd && process.env.SEED_SAMPLE !== "true") || (await prisma.pet.count()) > 0) {
+    console.log("ข้ามการเพิ่มสัตว์ตัวอย่าง");
+    return;
+  }
 
   for (const pet of samplePets) {
     await prisma.pet.create({
@@ -103,7 +110,7 @@ async function main() {
 main()
   .catch((e) => {
     console.error("❌ Seed Error:", e);
-    process.exit(1);
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();
