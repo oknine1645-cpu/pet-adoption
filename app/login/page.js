@@ -3,7 +3,6 @@
 import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -131,10 +130,6 @@ function LoginForm() {
           </svg>
           เข้าสู่ระบบด้วย Google
         </button>
-
-        <p style={{ marginTop: 22, textAlign: "center", fontSize: 13, color: "#64748b" }}>
-          ยังไม่มีบัญชี? <Link href="/register" style={{ color: "#0284c7", fontWeight: 600, textDecoration: "none" }}>สมัครสมาชิก</Link>
-        </p>
       </div>
     </div>
   );

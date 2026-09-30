@@ -2,11 +2,13 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-// ระบุอีเมลเฉพาะที่อนุญาตให้เข้าถึงระบบเจ้าหน้าที่ได้
-const ALLOWED_ADMIN_EMAILS = [
-  process.env.ADMIN_EMAIL,
-  "oknine122@gmail.com", // ใส่อีเมลของคุณไว้เป็นค่าสำรองตรงนี้ได้เลย (เพิ่มอีเมลอื่นคั่นด้วยจุลภาคได้)
-].filter(Boolean);
+// ป้องกันไม่ให้ Search Engine (เช่น Google) ทำการเก็บดัชนี (Index) หน้าแอดมิน
+export const metadata = {
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default async function AdminLayout({ children }) {
   let session = null;
@@ -23,14 +25,8 @@ export default async function AdminLayout({ children }) {
     redirect("/login");
   }
 
-  // 2. ตรวจสอบว่าอีเมลตรงกับรายชื่อที่กำหนดไว้หรือไม่
-  const userEmail = session.user.email?.toLowerCase();
-  const isAuthorized = ALLOWED_ADMIN_EMAILS.some(
-    (email) => email?.toLowerCase() === userEmail
-  );
-
-  // 3. ถ้าล็อกอินแล้วแต่ไม่ใช่อีเมลเจ้าหน้าที่ ให้แสดงหน้าปฏิเสธสิทธิ์ (ไม่สั่ง redirect วนไปหน้า login)
-  if (!isAuthorized) {
+  // 2. ตรวจสอบสิทธิ์ว่ามี role เป็น ADMIN หรือไม่
+  if (session.user.role !== "ADMIN") {
     return (
       <div
         style={{
@@ -99,6 +95,6 @@ export default async function AdminLayout({ children }) {
     );
   }
 
-  // 4. หากเป็นอีเมลที่ได้รับอนุญาต ปล่อยให้เข้าใช้งานระบบ Admin ตามปกติ
+  // 3. หากเป็น ADMIN ปล่อยให้เข้าใช้งานระบบ Admin ตามปกติ
   return <>{children}</>;
 }
