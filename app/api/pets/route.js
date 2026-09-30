@@ -50,7 +50,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
     }
 
-    // 1. แปลงค่าอายุ (ageMonths) และประเภทสัตว์ให้เป็นตัวเลข Int ชัวร์ๆ
+    // 1. แปลงค่าอายุและประเภทสัตว์ให้เป็นตัวเลข Int
     const resolvedAgeMonths = parseInt(body.ageMonths ?? body.age ?? 0, 10);
     const resolvedTypeId = parseInt(body.petTypeId || body.typeId, 10);
 
@@ -59,12 +59,15 @@ export async function POST(request) {
       return NextResponse.json({ errors }, { status: 400 });
     }
 
-    // 2. เติม ageMonths และ petTypeId เข้าไปใน data ให้ตรงกับที่ Prisma ต้องการ
+    // 2. จัดรูปแบบข้อมูล และตัดฟิลด์ age ที่ไม่มีในฐานข้อมูลทิ้ง
     const petData = {
       ...data,
       petTypeId: isNaN(resolvedTypeId) ? data.petTypeId : resolvedTypeId,
-      ageMonths: isNaN(resolvedAgeMonths) ? 0 : resolvedAgeMonths, // บังคับส่ง ageMonths ตรงนี้
+      ageMonths: isNaN(resolvedAgeMonths) ? 0 : resolvedAgeMonths,
     };
+
+    // ลบ age ทิ้งเพื่อป้องกัน Prisma ฟ้อง Unknown argument
+    delete petData.age;
 
     const pet = await prisma.pet.create({
       data: petData,
