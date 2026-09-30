@@ -5,6 +5,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 
+// ฟังก์ชันช่วยอ่าน JSON อย่างปลอดภัย ป้องกัน Unexpected end of JSON input
+async function readJsonSafe(res) {
+  try {
+    const text = await res.text();
+    return text ? JSON.parse(text) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
 // ฟังก์ชันแปลงชื่อประเภทสัตว์ 2 ภาษา
 function formatPetTypeName(name, lang) {
   if (!name) return "-";
@@ -92,10 +102,10 @@ export default function EditPetPage({ params: paramsPromise }) {
           return;
         }
 
-        const typesData = await typesRes.json();
-        const petData = await petRes.json();
+        const typesData = await readJsonSafe(typesRes);
+        const petData = await readJsonSafe(petRes);
 
-        setTypes(typesData);
+        setTypes(Array.isArray(typesData) ? typesData : []);
         setForm({
           name: petData.name || "",
           petTypeId: String(petData.petTypeId || petData.typeId || ""),
@@ -129,7 +139,7 @@ export default function EditPetPage({ params: paramsPromise }) {
       const pB = priority[b.name] || 99;
       if (pA !== pB) return pA - pB;
 
-      return a.name.localeCompare(b.name, "th");
+      return (a.name || "").localeCompare(b.name || "", "th");
     });
   }, [types]);
 
@@ -150,12 +160,15 @@ export default function EditPetPage({ params: paramsPromise }) {
         body: data,
       });
 
-      if (!res.ok) throw new Error("Upload failed");
-      const result = await res.json();
+      const result = await readJsonSafe(res);
+      if (!res.ok || !result.url) {
+        throw new Error(result.error || (isEn ? "Failed to upload image" : "อัปโหลดรูปภาพไม่สำเร็จ"));
+      }
+
       setForm((prev) => ({ ...prev, imageUrl: result.url }));
     } catch (err) {
       console.error(err);
-      setError(isEn ? "Failed to upload image" : "อัปโหลดรูปภาพไม่สำเร็จ");
+      setError(err.message || (isEn ? "Failed to upload image" : "อัปโหลดรูปภาพไม่สำเร็จ"));
     } finally {
       setUploadingImage(false);
     }
@@ -168,10 +181,19 @@ export default function EditPetPage({ params: paramsPromise }) {
     setError("");
 
     try {
+      const resolvedTypeId = parseInt(form.petTypeId, 10);
+      const resolvedAge = form.ageMonths !== "" ? parseInt(form.ageMonths, 10) : 0;
+
       const payload = {
-        ...form,
-        petTypeId: Number(form.petTypeId),
-        ageMonths: Number(form.ageMonths),
+        name: form.name.trim(),
+        petTypeId: resolvedTypeId,
+        typeId: resolvedTypeId,
+        breed: form.breed.trim() || null,
+        ageMonths: isNaN(resolvedAge) ? 0 : resolvedAge,
+        gender: form.gender,
+        status: form.status,
+        description: form.description.trim() || null,
+        imageUrl: form.imageUrl.trim() || null,
       };
 
       const res = await fetch(`/api/pets/${params.id}`, {
@@ -180,9 +202,15 @@ export default function EditPetPage({ params: paramsPromise }) {
         body: JSON.stringify(payload),
       });
 
+      const data = await readJsonSafe(res);
+
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || text.saveError);
+        // ดึง Error จากเซิร์ฟเวอร์มาแสดงตรงๆ ให้เห็นชัดเจน
+        const errMsg =
+          data.error ||
+          (data.errors && Object.values(data.errors).flat()[0]) ||
+          text.saveError;
+        throw new Error(errMsg);
       }
 
       router.push("/admin");
@@ -249,9 +277,10 @@ export default function EditPetPage({ params: paramsPromise }) {
               color: "#dc2626",
               fontSize: 13,
               marginBottom: 24,
+              fontWeight: 500,
             }}
           >
-            {error}
+            ⚠️ {error}
           </div>
         )}
 
@@ -273,6 +302,7 @@ export default function EditPetPage({ params: paramsPromise }) {
                   alignItems: "center",
                   justifyContent: "center",
                   border: "1px solid #e2e8f0",
+                  flexShrink: 0,
                 }}
               >
                 {form.imageUrl ? (
