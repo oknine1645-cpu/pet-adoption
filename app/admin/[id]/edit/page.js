@@ -1,189 +1,248 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useMemo, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useLanguage } from "@/context/LanguageContext";
 
-export default function EditPetPage({ params }) {
-  const resolvedParams = use(params);
-  const petId = resolvedParams.id;
+// ฟังก์ชันแปลงชื่อประเภทสัตว์ 2 ภาษา
+function formatPetTypeName(name, lang) {
+  if (!name) return "-";
+  if (lang !== "en") return name;
+  const dict = {
+    "สุนัข": "Dogs",
+    "แมว": "Cats",
+    "กระต่าย": "Rabbits",
+    "นก": "Birds",
+    "หนูแฮมสเตอร์": "Hamsters",
+    "อื่นๆ": "Others",
+    "อื่น ๆ": "Others",
+  };
+  return dict[name.trim()] || name;
+}
+
+export default function EditPetPage({ params: paramsPromise }) {
+  const params = use(paramsPromise);
   const router = useRouter();
+  const { lang, t } = useLanguage();
+  const isEn = lang === "en";
 
   const [types, setTypes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [error, setError] = useState("");
+
   const [form, setForm] = useState({
     name: "",
-    typeId: "",
+    petTypeId: "",
     breed: "",
     ageMonths: "",
     gender: "MALE",
     status: "AVAILABLE",
-    imageUrl: "",
     description: "",
-    confirmReopen: false,
+    imageUrl: "",
   });
-  const [originalStatus, setOriginalStatus] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
 
+  // พจนานุกรมข้อความ 2 ภาษาสำหรับหน้าแก้ไข
+  const text = {
+    backToAdmin: isEn ? "← Back to Admin Dashboard" : "← กลับหน้าจัดการระบบ",
+    pageTitle: isEn ? "✏️ Edit Pet Information" : "✏️ แก้ไขข้อมูลสัตว์เลี้ยง",
+    pageSubtitle: (name) =>
+      isEn
+        ? `Update details, status, or change photo for ${name || "pet"}`
+        : `ปรับปรุงข้อมูล อัปเดตสถานะ หรือเปลี่ยนรูปภาพของ ${name || "สัตว์เลี้ยง"}`,
+    imageLabel: isEn ? "Pet Photo" : "รูปภาพสัตว์เลี้ยง",
+    changePhoto: isEn ? "📁 Change image from computer" : "📁 เปลี่ยนรูปภาพจากคอมพิวเตอร์",
+    uploading: isEn ? "Uploading image..." : "กำลังอัปโหลดรูป...",
+    removePhoto: isEn ? "Remove photo" : "ลบรูปออก",
+    nameLabel: isEn ? "Pet Name *" : "ชื่อสัตว์เลี้ยง *",
+    typeLabel: isEn ? "Pet Type *" : "ประเภทสัตว์ *",
+    selectType: isEn ? "-- Select pet type --" : "-- เลือกประเภทสัตว์ --",
+    breedLabel: isEn ? "Breed" : "สายพันธุ์",
+    ageLabel: isEn ? "Age (Months) *" : "อายุ (เดือน) *",
+    genderLabel: isEn ? "Gender" : "เพศ",
+    male: isEn ? "Male (MALE)" : "เพศผู้ (Male)",
+    female: isEn ? "Female (FEMALE)" : "เพศเมีย (Female)",
+    statusLabel: isEn ? "Adoption Status" : "สถานะการรับเลี้ยง",
+    statusAvailable: isEn ? "Available (AVAILABLE)" : "พร้อมรับเลี้ยง (AVAILABLE)",
+    statusPending: isEn ? "Pending (PENDING)" : "รอพิจารณา (PENDING)",
+    statusAdopted: isEn ? "Adopted (ADOPTED)" : "รับเลี้ยงแล้ว (ADOPTED)",
+    statusUnavailable: isEn ? "Unavailable (UNAVAILABLE)" : "ปิดรับเลี้ยงชั่วคราว (UNAVAILABLE)",
+    descLabel: isEn ? "Bio & Personality" : "ประวัติและอุปนิสัย",
+    cancelBtn: isEn ? "Cancel" : "ยกเลิก",
+    saveBtn: isEn ? "Save Changes" : "บันทึกการแก้ไข",
+    savingBtn: isEn ? "Saving changes..." : "กำลังบันทึก...",
+    loadError: isEn ? "Failed to load pet data" : "โหลดข้อมูลสัตว์เลี้ยงไม่สำเร็จ",
+    saveError: isEn ? "Failed to save changes" : "บันทึกข้อมูลไม่สำเร็จ กรุณากรอกข้อมูลให้ครบถ้วน",
+  };
+
+  // ดึงข้อมูลประเภทสัตว์ และ ข้อมูลสัตว์เลี้ยงตัวนี้
   useEffect(() => {
     async function initData() {
       try {
         const [typesRes, petRes] = await Promise.all([
           fetch("/api/pet-types"),
-          fetch(`/api/pets/${petId}`),
+          fetch(`/api/pets/${params.id}`),
         ]);
 
-        if (typesRes.ok) setTypes(await typesRes.json());
-        if (petRes.ok) {
-          const pet = await petRes.json();
-          setForm({
-            name: pet.name || "",
-            typeId: pet.typeId || pet.petTypeId || "",
-            breed: pet.breed || "",
-            ageMonths: pet.ageMonths ?? 0,
-            gender: pet.gender || "MALE",
-            status: pet.status || "AVAILABLE",
-            imageUrl: pet.imageUrl || "",
-            description: pet.description || "",
-            confirmReopen: false,
-          });
-          setOriginalStatus(pet.status);
-        } else {
-          setError("ไม่พบข้อมูลสัตว์เลี้ยงตัวนี้");
+        if (!typesRes.ok || !petRes.ok) {
+          setError(text.loadError);
+          setLoading(false);
+          return;
         }
+
+        const typesData = await typesRes.json();
+        const petData = await petRes.json();
+
+        setTypes(typesData);
+        setForm({
+          name: petData.name || "",
+          petTypeId: String(petData.petTypeId || petData.typeId || ""),
+          breed: petData.breed || "",
+          ageMonths: petData.ageMonths ?? "",
+          gender: petData.gender || "MALE",
+          status: petData.status || "AVAILABLE",
+          description: petData.description || "",
+          imageUrl: petData.imageUrl || "",
+        });
       } catch (err) {
-        setError("เกิดข้อผิดพลาดในการโหลดข้อมูล");
+        console.error(err);
+        setError(text.loadError);
       } finally {
         setLoading(false);
       }
     }
-
     initData();
-  }, [petId]);
+  }, [params.id]);
 
-  // ฟังก์ชันอัปโหลดรูปภาพจากในเครื่อง
-  async function handleImageFileChange(e) {
+  // จัดลำดับประเภทสัตว์: สุนัข -> แมว -> อื่นๆ ท้ายสุด
+  const sortedTypes = useMemo(() => {
+    return [...types].sort((a, b) => {
+      const isOtherA = a.name === "อื่นๆ" || a.name?.toLowerCase() === "other";
+      const isOtherB = b.name === "อื่นๆ" || b.name?.toLowerCase() === "other";
+      if (isOtherA) return 1;
+      if (isOtherB) return -1;
+
+      const priority = { "สุนัข": 1, "แมว": 2, Dog: 1, Cat: 2 };
+      const pA = priority[a.name] || 99;
+      const pB = priority[b.name] || 99;
+      if (pA !== pB) return pA - pB;
+
+      return a.name.localeCompare(b.name, "th");
+    });
+  }, [types]);
+
+  // อัปโหลดรูปภาพเข้า Cloudinary ผ่าน /api/upload
+  async function handleImageUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      setError("กรุณาเลือกไฟล์ที่เป็นรูปภาพเท่านั้น (JPG, PNG, WEBP)");
-      return;
-    }
-
-    setUploading(true);
+    setUploadingImage(true);
     setError("");
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
+      const data = new FormData();
+      data.append("file", file);
+
       const res = await fetch("/api/upload", {
         method: "POST",
-        body: formData,
+        body: data,
       });
 
-      const data = await res.json();
-      if (res.ok) {
-        setForm((prev) => ({ ...prev, imageUrl: data.url }));
-      } else {
-        setError(data.error || "อัปโหลดรูปภาพไม่สำเร็จ");
-      }
+      if (!res.ok) throw new Error("Upload failed");
+      const result = await res.json();
+      setForm((prev) => ({ ...prev, imageUrl: result.url }));
     } catch (err) {
-      setError("เกิดข้อผิดพลาดในการส่งไฟล์ไปยังเซิร์ฟเวอร์");
+      console.error(err);
+      setError(isEn ? "Failed to upload image" : "อัปโหลดรูปภาพไม่สำเร็จ");
     } finally {
-      setUploading(false);
+      setUploadingImage(false);
     }
   }
 
+  // ส่งข้อมูลที่แก้ไข
   async function handleSubmit(e) {
     e.preventDefault();
+    setSubmitting(true);
     setError("");
 
-    if (!form.name.trim()) {
-      setError("กรุณากรอกชื่อสัตว์เลี้ยง");
-      return;
-    }
-
-    setSaving(true);
-
     try {
-      const res = await fetch(`/api/pets/${petId}`, {
+      const payload = {
+        ...form,
+        petTypeId: Number(form.petTypeId),
+        ageMonths: Number(form.ageMonths),
+      };
+
+      const res = await fetch(`/api/pets/${params.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name.trim(),
-          typeId: Number(form.typeId) || form.typeId,
-          breed: form.breed.trim() || null,
-          ageMonths: Number(form.ageMonths) || 0,
-          gender: form.gender,
-          status: form.status,
-          imageUrl: form.imageUrl.trim() || null,
-          description: form.description.trim() || null,
-          confirmReopen: form.confirmReopen,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.error || "เกิดข้อผิดพลาดในการอัปเดต");
+        const errData = await res.json();
+        throw new Error(errData.error || text.saveError);
       }
 
       router.push("/admin");
       router.refresh();
     } catch (err) {
-      setError(err.message);
-    } finally {
-      // 11.3 setSaving(false) เสมอ
-      setSaving(false);
+      console.error(err);
+      setError(err.message || text.saveError);
+      setSubmitting(false);
     }
   }
 
   if (loading) {
     return (
-      <div style={{ textAlign: "center", padding: "80px 0", color: "#64748b" }}>
-        กำลังโหลดข้อมูลสัตว์เลี้ยง...
+      <div style={{ textAlign: "center", padding: "100px 0", color: "#64748b" }}>
+        <span style={{ fontSize: 36, display: "block", marginBottom: 12 }}>⏳</span>
+        {isEn ? "Loading pet data..." : "กำลังโหลดข้อมูล..."}
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 680, margin: "0 auto", paddingBottom: 60 }}>
-      <div style={{ marginBottom: 20 }}>
-        <Link
-          href="/admin"
-          style={{ fontSize: 14, fontWeight: 600, color: "#64748b", display: "inline-flex", gap: 6 }}
-        >
-          ← กลับหน้าจัดการระบบ
-        </Link>
-      </div>
+    <div style={{ maxWidth: 720, margin: "40px auto", padding: "0 20px" }}>
+      {/* ลิงก์ย้อนกลับ */}
+      <Link
+        href="/admin"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          fontSize: 14,
+          fontWeight: 600,
+          color: "#475569",
+          textDecoration: "none",
+          marginBottom: 24,
+        }}
+      >
+        {text.backToAdmin}
+      </Link>
 
       <div
         style={{
-          background: "#ffffff",
+          backgroundColor: "#ffffff",
           borderRadius: 24,
           padding: "36px 32px",
           border: "1px solid #e2e8f0",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.04)",
+          boxShadow: "0 10px 25px -5px rgba(0,0,0,0.05)",
         }}
       >
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>
-            ✏️ แก้ไขข้อมูลสัตว์เลี้ยง
-          </h1>
-          <p style={{ fontSize: 14, color: "#64748b", margin: 0 }}>
-            ปรับปรุงข้อมูล อัปเดตสถานะ หรือเปลี่ยนรูปภาพของ {form.name}
-          </p>
-        </div>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>
+          {text.pageTitle}
+        </h1>
+        <p style={{ fontSize: 14, color: "#64748b", margin: "0 0 28px 0" }}>
+          {text.pageSubtitle(form.name)}
+        </p>
 
         {error && (
           <div
             style={{
               padding: "12px 16px",
-              background: "#fee2e2",
+              backgroundColor: "#fee2e2",
               border: "1px solid #fecaca",
               borderRadius: 12,
               color: "#dc2626",
@@ -191,93 +250,85 @@ export default function EditPetPage({ params }) {
               marginBottom: 24,
             }}
           >
-            ⚠️ {error}
+            {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {/* ช่องอัปโหลดรูปภาพ */}
+          {/* รูปภาพสัตว์เลี้ยง */}
           <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 8 }}>
-              รูปภาพสัตว์เลี้ยง
+            <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 10 }}>
+              {text.imageLabel}
             </label>
-            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               <div
                 style={{
                   width: 90,
                   height: 90,
-                  borderRadius: 14,
-                  border: "2px dashed #cbd5e1",
-                  background: "#f8fafc",
+                  borderRadius: 16,
+                  backgroundColor: "#f1f5f9",
+                  overflow: "hidden",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  overflow: "hidden",
-                  flexShrink: 0,
+                  border: "1px solid #e2e8f0",
                 }}
               >
                 {form.imageUrl ? (
-                  <img
-                    src={form.imageUrl}
-                    alt="Preview"
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
+                  <img src={form.imageUrl} alt="Pet" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
-                  <span style={{ fontSize: 28, color: "#94a3b8" }}>📷</span>
+                  <span style={{ fontSize: 32 }}>🐾</span>
                 )}
               </div>
 
-              <div style={{ flex: 1 }}>
-                <input
-                  type="file"
-                  id="edit-pet-photo-upload"
-                  accept="image/*"
-                  onChange={handleImageFileChange}
-                  disabled={uploading}
-                  style={{ display: "none" }}
-                />
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <label
-                  htmlFor="edit-pet-photo-upload"
                   style={{
-                    display: "inline-block",
-                    padding: "9px 16px",
-                    background: "#f1f5f9",
+                    padding: "10px 16px",
+                    backgroundColor: "#f8fafc",
                     border: "1.5px solid #cbd5e1",
                     borderRadius: 10,
                     fontSize: 13,
                     fontWeight: 600,
                     color: "#334155",
-                    cursor: uploading ? "not-allowed" : "pointer",
+                    cursor: uploadingImage ? "not-allowed" : "pointer",
                   }}
                 >
-                  {uploading ? "⏳ กำลังอัปโหลด..." : "📁 เปลี่ยนรูปภาพจากคอมพิวเตอร์"}
+                  {uploadingImage ? text.uploading : text.changePhoto}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingImage}
+                    onChange={handleImageUpload}
+                    style={{ display: "none" }}
+                  />
                 </label>
+
                 {form.imageUrl && (
                   <button
                     type="button"
                     onClick={() => setForm((prev) => ({ ...prev, imageUrl: "" }))}
                     style={{
-                      marginLeft: 10,
-                      background: "none",
                       border: "none",
+                      backgroundColor: "transparent",
                       color: "#dc2626",
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: 600,
                       cursor: "pointer",
                     }}
                   >
-                    ลบรูปออก
+                    {text.removePhoto}
                   </button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* ชื่อ และ ประเภท */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
+          {/* ชื่อสัตว์เลี้ยง & ประเภทสัตว์ */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
-                ชื่อสัตว์เลี้ยง *
+              <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+                {text.nameLabel}
               </label>
               <input
                 type="text"
@@ -287,45 +338,50 @@ export default function EditPetPage({ params }) {
                 style={{
                   width: "100%",
                   padding: "11px 14px",
-                  borderRadius: 10,
                   border: "1.5px solid #cbd5e1",
+                  borderRadius: 10,
                   fontSize: 14,
                   outline: "none",
+                  boxSizing: "border-box",
                 }}
               />
             </div>
 
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
-                ประเภทสัตว์ *
+              <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+                {text.typeLabel}
               </label>
               <select
-                value={form.typeId}
-                onChange={(e) => setForm({ ...form, typeId: e.target.value })}
+                required
+                value={form.petTypeId}
+                onChange={(e) => setForm({ ...form, petTypeId: e.target.value })}
                 style={{
                   width: "100%",
                   padding: "11px 14px",
-                  borderRadius: 10,
                   border: "1.5px solid #cbd5e1",
+                  borderRadius: 10,
                   fontSize: 14,
-                  background: "#ffffff",
                   outline: "none",
+                  backgroundColor: "#ffffff",
+                  boxSizing: "border-box",
+                  cursor: "pointer",
                 }}
               >
-                {types.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
+                <option value="">{text.selectType}</option>
+                {sortedTypes.map((tp) => (
+                  <option key={tp.id} value={tp.id}>
+                    {formatPetTypeName(tp.name, lang)}
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* สายพันธุ์ และ อายุ */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
+          {/* สายพันธุ์ & อายุ */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
-                สายพันธุ์
+              <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+                {text.breedLabel}
               </label>
               <input
                 type="text"
@@ -334,41 +390,43 @@ export default function EditPetPage({ params }) {
                 style={{
                   width: "100%",
                   padding: "11px 14px",
-                  borderRadius: 10,
                   border: "1.5px solid #cbd5e1",
+                  borderRadius: 10,
                   fontSize: 14,
                   outline: "none",
+                  boxSizing: "border-box",
                 }}
               />
             </div>
 
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
-                อายุ (เดือน) *
+              <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+                {text.ageLabel}
               </label>
               <input
                 type="number"
-                min="0"
                 required
+                min="0"
                 value={form.ageMonths}
                 onChange={(e) => setForm({ ...form, ageMonths: e.target.value })}
                 style={{
                   width: "100%",
                   padding: "11px 14px",
-                  borderRadius: 10,
                   border: "1.5px solid #cbd5e1",
+                  borderRadius: 10,
                   fontSize: 14,
                   outline: "none",
+                  boxSizing: "border-box",
                 }}
               />
             </div>
           </div>
 
-          {/* เพศ และ สถานะ */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
+          {/* เพศ & สถานะการรับเลี้ยง */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
-                เพศ
+              <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+                {text.genderLabel}
               </label>
               <select
                 value={form.gender}
@@ -376,22 +434,23 @@ export default function EditPetPage({ params }) {
                 style={{
                   width: "100%",
                   padding: "11px 14px",
-                  borderRadius: 10,
                   border: "1.5px solid #cbd5e1",
+                  borderRadius: 10,
                   fontSize: 14,
-                  background: "#ffffff",
                   outline: "none",
+                  backgroundColor: "#ffffff",
+                  boxSizing: "border-box",
+                  cursor: "pointer",
                 }}
               >
-                <option value="MALE">เพศผู้ (Male)</option>
-                <option value="FEMALE">เพศเมีย (Female)</option>
-                <option value="UNKNOWN">ไม่ระบุ</option>
+                <option value="MALE">{text.male}</option>
+                <option value="FEMALE">{text.female}</option>
               </select>
             </div>
 
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
-                สถานะการรับเลี้ยง
+              <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+                {text.statusLabel}
               </label>
               <select
                 value={form.status}
@@ -399,51 +458,27 @@ export default function EditPetPage({ params }) {
                 style={{
                   width: "100%",
                   padding: "11px 14px",
-                  borderRadius: 10,
                   border: "1.5px solid #cbd5e1",
+                  borderRadius: 10,
                   fontSize: 14,
-                  background: "#ffffff",
                   outline: "none",
+                  backgroundColor: "#ffffff",
+                  boxSizing: "border-box",
+                  cursor: "pointer",
                 }}
               >
-                <option value="AVAILABLE">พร้อมรับเลี้ยง (AVAILABLE)</option>
-                <option value="PENDING">รอพิจารณา (PENDING)</option>
-                <option value="ADOPTED">รับเลี้ยงแล้ว (ADOPTED)</option>
-                <option value="UNAVAILABLE">ปิดรับเลี้ยงชั่วคราว (UNAVAILABLE)</option>
+                <option value="AVAILABLE">{text.statusAvailable}</option>
+                <option value="PENDING">{text.statusPending}</option>
+                <option value="ADOPTED">{text.statusAdopted}</option>
+                <option value="UNAVAILABLE">{text.statusUnavailable}</option>
               </select>
             </div>
           </div>
 
-          {/* ยืนยันเปิดรับเลี้ยงใหม่อีกครั้ง */}
-          {originalStatus === "ADOPTED" && form.status === "AVAILABLE" && (
-            <div
-              style={{
-                padding: "14px 16px",
-                background: "#fef3c7",
-                borderRadius: 12,
-                border: "1px solid #fde68a",
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-              }}
-            >
-              <input
-                type="checkbox"
-                id="confirmReopen"
-                checked={form.confirmReopen}
-                onChange={(e) => setForm({ ...form, confirmReopen: e.target.checked })}
-                style={{ width: 18, height: 18, cursor: "pointer" }}
-              />
-              <label htmlFor="confirmReopen" style={{ fontSize: 13, color: "#92400e", fontWeight: 600, cursor: "pointer" }}>
-                ยืนยันเปิดรับเลี้ยงอีกครั้ง (สัตว์ตัวนี้เคยมีบ้านแล้ว)
-              </label>
-            </div>
-          )}
-
           {/* ประวัติและอุปนิสัย */}
           <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
-              ประวัติและอุปนิสัย
+            <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+              {text.descLabel}
             </label>
             <textarea
               rows={4}
@@ -452,48 +487,53 @@ export default function EditPetPage({ params }) {
               style={{
                 width: "100%",
                 padding: "11px 14px",
-                borderRadius: 10,
                 border: "1.5px solid #cbd5e1",
+                borderRadius: 10,
                 fontSize: 14,
                 outline: "none",
+                fontFamily: "inherit",
+                boxSizing: "border-box",
                 resize: "vertical",
               }}
             />
           </div>
 
-          {/* ปุ่มบันทึก */}
-          <div style={{ display: "flex", gap: 12, marginTop: 10 }}>
-            <Link
-              href="/admin"
+          {/* ปุ่มบันทึกและยกเลิก */}
+          <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+            <button
+              type="button"
+              onClick={() => router.push("/admin")}
               style={{
                 flex: 1,
-                textAlign: "center",
                 padding: "13px",
-                borderRadius: 10,
+                backgroundColor: "#ffffff",
                 border: "1.5px solid #cbd5e1",
+                borderRadius: 12,
                 fontSize: 14,
-                fontWeight: 600,
+                fontWeight: 700,
                 color: "#475569",
+                cursor: "pointer",
               }}
             >
-              ยกเลิก
-            </Link>
+              {text.cancelBtn}
+            </button>
+
             <button
               type="submit"
-              disabled={saving || uploading}
+              disabled={submitting || uploadingImage}
               style={{
                 flex: 2,
                 padding: "13px",
-                borderRadius: 10,
-                background: saving || uploading ? "#86efac" : "#15803d",
+                backgroundColor: submitting ? "#86efac" : "#15803d",
                 border: "none",
+                borderRadius: 12,
                 fontSize: 14,
                 fontWeight: 700,
                 color: "#ffffff",
-                cursor: saving || uploading ? "not-allowed" : "pointer",
+                cursor: submitting ? "not-allowed" : "pointer",
               }}
             >
-              {saving ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
+              {submitting ? text.savingBtn : text.saveBtn}
             </button>
           </div>
         </form>
