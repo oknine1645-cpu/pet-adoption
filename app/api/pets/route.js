@@ -41,50 +41,29 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  // ตรวจสอบสิทธิ์ Admin
   const { error } = await requireAdmin();
-  if (error) {
-    return NextResponse.json(
-      { error: "คุณไม่มีสิทธิ์ผู้ดูแลระบบ (กรุณาเข้าสู่ระบบด้วยบัญชี Admin)" },
-      { status: 403 }
-    );
-  }
+  if (error) return error;
 
   try {
-    const rawBody = await request.json().catch(() => null);
-    if (!rawBody || typeof rawBody !== "object") {
-      return NextResponse.json({ error: "ข้อมูลที่ส่งมาไม่ถูกต้อง" }, { status: 400 });
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
     }
 
-    // แปลง typeId และอายุ ageMonths ให้เป็นตัวเลข Int ชัวร์ๆ
-    const normalizedTypeId = Number(rawBody.petTypeId || rawBody.typeId);
-    const parsedAge = Number(rawBody.ageMonths ?? rawBody.age ?? 0);
-    const resolvedAge = isNaN(parsedAge) ? 0 : parsedAge;
+    // 1. แปลงค่าอายุ (ageMonths) และประเภทสัตว์ให้เป็นตัวเลข Int ชัวร์ๆ
+    const resolvedAgeMonths = parseInt(body.ageMonths ?? body.age ?? 0, 10);
+    const resolvedTypeId = parseInt(body.petTypeId || body.typeId, 10);
 
-    const body = {
-      ...rawBody,
-      petTypeId: isNaN(normalizedTypeId) ? undefined : normalizedTypeId,
-      typeId: isNaN(normalizedTypeId) ? undefined : normalizedTypeId,
-      ageMonths: resolvedAge,
-      age: resolvedAge,
-    };
-
-    // ตรวจสอบข้อมูลด้วย parsePet
     const { errors = {}, data } = parsePet(body);
-
-    if (Object.keys(errors).length > 0) {
-      const firstErrorMessage = Object.values(errors).flat()[0] || "ข้อมูลที่กรอกไม่ถูกต้อง";
-      return NextResponse.json(
-        { error: firstErrorMessage, errors },
-        { status: 400 }
-      );
+    if (Object.keys(errors).length) {
+      return NextResponse.json({ errors }, { status: 400 });
     }
 
-    // รวมข้อมูลและบังคับใส่ ageMonths ให้ Prisma
+    // 2. เติม ageMonths และ petTypeId เข้าไปใน data ให้ตรงกับที่ Prisma ต้องการ
     const petData = {
       ...data,
-      petTypeId: data?.petTypeId || normalizedTypeId,
-      ageMonths: resolvedAge, // ส่ง ageMonths ให้ตรงกับ Schema บังคับ
+      petTypeId: isNaN(resolvedTypeId) ? data.petTypeId : resolvedTypeId,
+      ageMonths: isNaN(resolvedAgeMonths) ? 0 : resolvedAgeMonths, // บังคับส่ง ageMonths ตรงนี้
     };
 
     const pet = await prisma.pet.create({
@@ -94,18 +73,10 @@ export async function POST(request) {
 
     return NextResponse.json(pet, { status: 201 });
   } catch (e) {
-    console.error("POST Pet Error:", e);
-
     if (e?.code === "P2003") {
-      return NextResponse.json(
-        { error: "ไม่พบประเภทสัตว์นี้ในฐานข้อมูล กรุณาเลือกใหม่", errors: { petTypeId: "ไม่พบประเภทสัตว์นี้" } },
-        { status: 400 }
-      );
+      return NextResponse.json({ errors: { petTypeId: "ไม่พบประเภทสัตว์นี้" } }, { status: 400 });
     }
-
-    return NextResponse.json(
-      { error: e.message || "ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง" },
-      { status: 500 }
-    );
+    console.error("POST Pet Error:", e);
+    return NextResponse.json({ error: e.message || "ไม่สามารถบันทึกข้อมูลได้" }, { status: 500 });
   }
 }
