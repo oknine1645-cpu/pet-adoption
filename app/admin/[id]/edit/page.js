@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 
+// ฟังก์ชันช่วยอ่าน JSON อย่างปลอดภัย
 async function readJsonSafe(res) {
   try {
     const text = await res.text();
@@ -14,6 +15,7 @@ async function readJsonSafe(res) {
   }
 }
 
+// ฟังก์ชันแปลงชื่อประเภทสัตว์ 2 ภาษา
 function formatPetTypeName(name, lang) {
   if (!name) return "-";
   if (lang !== "en") return name;
@@ -41,6 +43,9 @@ export default function EditPetPage({ params: paramsPromise }) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState("");
   const [initialStatus, setInitialStatus] = useState("");
+
+  // สถานะเปิด/ปิด Pop-up Modal ยืนยันการเปลี่ยนสถานะ
+  const [showReopenModal, setShowReopenModal] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -83,9 +88,12 @@ export default function EditPetPage({ params: paramsPromise }) {
     savingBtn: isEn ? "Saving changes..." : "กำลังบันทึก...",
     loadError: isEn ? "Failed to load pet data" : "โหลดข้อมูลสัตว์เลี้ยงไม่สำเร็จ",
     saveError: isEn ? "Failed to save changes" : "บันทึกข้อมูลไม่สำเร็จ",
-    confirmReopenText: isEn
-      ? "This pet was already ADOPTED. Are you sure you want to change status back to AVAILABLE?"
-      : "สัตว์เลี้ยงตัวนี้เคยรับเลี้ยงแล้ว (ADOPTED) คุณต้องการเปลี่ยนสถานะกลับเป็นพร้อมรับเลี้ยง (AVAILABLE) ใช่หรือไม่?",
+    // ข้อความใน Modal สวยงาม
+    reopenModalTitle: isEn ? "Confirm Status Change" : "ยืนยันการเปลี่ยนสถานะสัตว์เลี้ยง",
+    reopenModalDesc: isEn
+      ? "This pet was already marked as ADOPTED. Are you sure you want to change status back to AVAILABLE and display it again?"
+      : "สัตว์เลี้ยงตัวนี้เคยมีสถานะ \"รับเลี้ยงแล้ว (ADOPTED)\" การเปลี่ยนกลับเป็น \"พร้อมรับเลี้ยง (AVAILABLE)\" จะทำให้กลับมาแสดงให้ประชาชนเห็นอีกครั้ง",
+    reopenConfirmBtn: isEn ? "Confirm Change" : "ยืนยันเปลี่ยนสถานะ",
   };
 
   useEffect(() => {
@@ -169,19 +177,10 @@ export default function EditPetPage({ params: paramsPromise }) {
     }
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError("");
-
-    // จัดการเงื่อนไข confirmReopen ถ้าเปลี่ยนจาก ADOPTED เป็น AVAILABLE
-    let confirmReopen = false;
-    if (initialStatus === "ADOPTED" && form.status === "AVAILABLE") {
-      const confirmed = window.confirm(text.confirmReopenText);
-      if (!confirmed) return;
-      confirmReopen = true;
-    }
-
+  // ฟังก์ชันยิง API บันทึกข้อมูล
+  async function executeSave(confirmReopen = false) {
     setSubmitting(true);
+    setError("");
 
     try {
       const resolvedTypeId = parseInt(form.petTypeId, 10);
@@ -223,6 +222,21 @@ export default function EditPetPage({ params: paramsPromise }) {
       setError(err.message || text.saveError);
       setSubmitting(false);
     }
+  }
+
+  // ฟังก์ชันตรวจสอบเมื่อกด Submit
+  function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+
+    // ถ้าเดิมเป็น ADOPTED แล้วเลือกเป็น AVAILABLE ให้เปิด Pop-up Modal สวยๆ ขึ้นมาถาม
+    if (initialStatus === "ADOPTED" && form.status === "AVAILABLE") {
+      setShowReopenModal(true);
+      return;
+    }
+
+    // กรณีปกติ บันทึกทันที
+    executeSave(false);
   }
 
   if (loading) {
@@ -565,6 +579,120 @@ export default function EditPetPage({ params: paramsPromise }) {
           </div>
         </form>
       </div>
+
+      {/* Modern Pop-up Modal ยืนยันเปลี่ยนสถานะ */}
+      {showReopenModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(5px)",
+            WebkitBackdropFilter: "blur(5px)",
+            zIndex: 10000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 440,
+              width: "100%",
+              backgroundColor: "#ffffff",
+              borderRadius: 22,
+              padding: "28px 24px",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+              textAlign: "center",
+              border: "1px solid #e2e8f0",
+            }}
+          >
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                backgroundColor: "#fef3c7",
+                color: "#d97706",
+                fontSize: 26,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px auto",
+              }}
+            >
+              🔄
+            </div>
+
+            <h3
+              style={{
+                fontSize: 18,
+                fontWeight: 800,
+                color: "#0f172a",
+                margin: "0 0 10px 0",
+              }}
+            >
+              {text.reopenModalTitle}
+            </h3>
+
+            <p
+              style={{
+                fontSize: 14,
+                color: "#64748b",
+                lineHeight: 1.6,
+                margin: "0 0 24px 0",
+              }}
+            >
+              {text.reopenModalDesc}
+            </p>
+
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setShowReopenModal(false)}
+                style={{
+                  flex: 1,
+                  padding: "12px 16px",
+                  backgroundColor: "#f8fafc",
+                  border: "1.5px solid #cbd5e1",
+                  borderRadius: 12,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#475569",
+                  cursor: "pointer",
+                }}
+              >
+                {text.cancelBtn}
+              </button>
+
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => {
+                  setShowReopenModal(false);
+                  executeSave(true);
+                }}
+                style={{
+                  flex: 1.5,
+                  padding: "12px 16px",
+                  backgroundColor: "#15803d",
+                  border: "none",
+                  borderRadius: 12,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "#ffffff",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 6px -1px rgba(21, 128, 61, 0.3)",
+                }}
+              >
+                {submitting ? text.savingBtn : text.reopenConfirmBtn}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
