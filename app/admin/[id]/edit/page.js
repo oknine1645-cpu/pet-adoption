@@ -5,17 +5,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 
-// อ่าน response แบบปลอดภัย ป้องกัน Unexpected end of JSON input
 async function readJsonSafe(res) {
   try {
-    const raw = await res.text();
-    return raw ? JSON.parse(raw) : {};
+    const text = await res.text();
+    return text ? JSON.parse(text) : {};
   } catch (e) {
     return {};
   }
 }
 
-// ฟังก์ชันแปลงชื่อประเภทสัตว์ 2 ภาษา
 function formatPetTypeName(name, lang) {
   if (!name) return "-";
   if (lang !== "en") return name;
@@ -42,19 +40,19 @@ export default function EditPetPage({ params: paramsPromise }) {
   const [submitting, setSubmitting] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState("");
+  const [initialStatus, setInitialStatus] = useState("");
 
   const [form, setForm] = useState({
     name: "",
     petTypeId: "",
     breed: "",
     ageMonths: "",
-    gender: "",
+    gender: "MALE",
     status: "AVAILABLE",
     description: "",
     imageUrl: "",
   });
 
-  // พจนานุกรมข้อความ 2 ภาษาสำหรับหน้าแก้ไข
   const text = {
     backToAdmin: isEn ? "← Back to Admin Dashboard" : "← กลับหน้าจัดการระบบ",
     pageTitle: isEn ? "✏️ Edit Pet Information" : "✏️ แก้ไขข้อมูลสัตว์เลี้ยง",
@@ -74,7 +72,6 @@ export default function EditPetPage({ params: paramsPromise }) {
     genderLabel: isEn ? "Gender" : "เพศ",
     male: isEn ? "Male (MALE)" : "เพศผู้ (Male)",
     female: isEn ? "Female (FEMALE)" : "เพศเมีย (Female)",
-    unknownGender: isEn ? "Unknown" : "ไม่ระบุ",
     statusLabel: isEn ? "Adoption Status" : "สถานะการรับเลี้ยง",
     statusAvailable: isEn ? "Available (AVAILABLE)" : "พร้อมรับเลี้ยง (AVAILABLE)",
     statusPending: isEn ? "Pending (PENDING)" : "รอพิจารณา (PENDING)",
@@ -85,10 +82,12 @@ export default function EditPetPage({ params: paramsPromise }) {
     saveBtn: isEn ? "Save Changes" : "บันทึกการแก้ไข",
     savingBtn: isEn ? "Saving changes..." : "กำลังบันทึก...",
     loadError: isEn ? "Failed to load pet data" : "โหลดข้อมูลสัตว์เลี้ยงไม่สำเร็จ",
-    saveError: isEn ? "Failed to save changes" : "บันทึกข้อมูลไม่สำเร็จ กรุณากรอกข้อมูลให้ครบถ้วน",
+    saveError: isEn ? "Failed to save changes" : "บันทึกข้อมูลไม่สำเร็จ",
+    confirmReopenText: isEn
+      ? "This pet was already ADOPTED. Are you sure you want to change status back to AVAILABLE?"
+      : "สัตว์เลี้ยงตัวนี้เคยรับเลี้ยงแล้ว (ADOPTED) คุณต้องการเปลี่ยนสถานะกลับเป็นพร้อมรับเลี้ยง (AVAILABLE) ใช่หรือไม่?",
   };
 
-  // ดึงข้อมูลประเภทสัตว์ และ ข้อมูลสัตว์เลี้ยงตัวนี้
   useEffect(() => {
     async function initData() {
       try {
@@ -107,12 +106,13 @@ export default function EditPetPage({ params: paramsPromise }) {
         const petData = await readJsonSafe(petRes);
 
         setTypes(Array.isArray(typesData) ? typesData : []);
+        setInitialStatus(petData.status || "AVAILABLE");
         setForm({
           name: petData.name || "",
           petTypeId: String(petData.petTypeId || petData.typeId || ""),
           breed: petData.breed || "",
           ageMonths: petData.ageMonths ?? "",
-          gender: petData.gender || "", // เก็บค่าว่างไว้ ไม่บังคับเป็นเพศผู้
+          gender: petData.gender || "MALE",
           status: petData.status || "AVAILABLE",
           description: petData.description || "",
           imageUrl: petData.imageUrl || "",
@@ -125,10 +125,8 @@ export default function EditPetPage({ params: paramsPromise }) {
       }
     }
     initData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
-  // จัดลำดับประเภทสัตว์: สุนัข -> แมว -> อื่นๆ ท้ายสุด
   const sortedTypes = useMemo(() => {
     return [...types].sort((a, b) => {
       const isOtherA = a.name === "อื่นๆ" || a.name?.toLowerCase() === "other";
@@ -145,7 +143,6 @@ export default function EditPetPage({ params: paramsPromise }) {
     });
   }, [types]);
 
-  // อัปโหลดรูปภาพเข้า Cloudinary ผ่าน /api/upload
   async function handleImageUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -157,33 +154,34 @@ export default function EditPetPage({ params: paramsPromise }) {
       const data = new FormData();
       data.append("file", file);
 
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: data,
-      });
-
+      const res = await fetch("/api/upload", { method: "POST", body: data });
       const result = await readJsonSafe(res);
+
       if (!res.ok || !result.url) {
-        throw new Error(
-          result.error ||
-            `${isEn ? "Failed to upload image" : "อัปโหลดรูปภาพไม่สำเร็จ"} (HTTP ${res.status})`
-        );
+        throw new Error(result.error || (isEn ? "Failed to upload image" : "อัปโหลดรูปภาพไม่สำเร็จ"));
       }
 
       setForm((prev) => ({ ...prev, imageUrl: result.url }));
     } catch (err) {
-      console.error(err);
       setError(err.message || (isEn ? "Failed to upload image" : "อัปโหลดรูปภาพไม่สำเร็จ"));
     } finally {
       setUploadingImage(false);
     }
   }
 
-  // ส่งข้อมูลที่แก้ไข
   async function handleSubmit(e) {
     e.preventDefault();
-    setSubmitting(true);
     setError("");
+
+    // จัดการเงื่อนไข confirmReopen ถ้าเปลี่ยนจาก ADOPTED เป็น AVAILABLE
+    let confirmReopen = false;
+    if (initialStatus === "ADOPTED" && form.status === "AVAILABLE") {
+      const confirmed = window.confirm(text.confirmReopenText);
+      if (!confirmed) return;
+      confirmReopen = true;
+    }
+
+    setSubmitting(true);
 
     try {
       const resolvedTypeId = parseInt(form.petTypeId, 10);
@@ -191,14 +189,15 @@ export default function EditPetPage({ params: paramsPromise }) {
 
       const payload = {
         name: form.name.trim(),
-        petTypeId: resolvedTypeId,
-        typeId: resolvedTypeId,
+        petTypeId: isNaN(resolvedTypeId) ? "" : resolvedTypeId,
+        typeId: isNaN(resolvedTypeId) ? "" : resolvedTypeId,
         breed: form.breed.trim() || null,
         ageMonths: isNaN(resolvedAge) ? 0 : resolvedAge,
-        gender: form.gender || null,
+        gender: form.gender || "MALE",
         status: form.status,
         description: form.description.trim() || null,
         imageUrl: form.imageUrl.trim() || null,
+        confirmReopen,
       };
 
       const res = await fetch(`/api/pets/${params.id}`, {
@@ -210,11 +209,10 @@ export default function EditPetPage({ params: paramsPromise }) {
       const data = await readJsonSafe(res);
 
       if (!res.ok) {
-        console.error("PUT /api/pets failed:", res.status, data);
         const errMsg =
           data.error ||
           (data.errors && Object.values(data.errors).flat()[0]) ||
-          `${text.saveError} (HTTP ${res.status})`;
+          text.saveError;
         throw new Error(errMsg);
       }
 
@@ -238,7 +236,6 @@ export default function EditPetPage({ params: paramsPromise }) {
 
   return (
     <div style={{ maxWidth: 720, margin: "40px auto", padding: "0 20px" }}>
-      {/* ลิงก์ย้อนกลับ */}
       <div style={{ marginBottom: 20 }}>
         <Link
           href="/admin"
@@ -290,7 +287,6 @@ export default function EditPetPage({ params: paramsPromise }) {
         )}
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {/* รูปภาพสัตว์เลี้ยง */}
           <div>
             <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 10 }}>
               {text.imageLabel}
@@ -360,7 +356,6 @@ export default function EditPetPage({ params: paramsPromise }) {
             </div>
           </div>
 
-          {/* ชื่อสัตว์เลี้ยง & ประเภทสัตว์ */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
               <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
@@ -413,7 +408,6 @@ export default function EditPetPage({ params: paramsPromise }) {
             </div>
           </div>
 
-          {/* สายพันธุ์ & อายุ */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
               <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
@@ -458,7 +452,6 @@ export default function EditPetPage({ params: paramsPromise }) {
             </div>
           </div>
 
-          {/* เพศ & สถานะการรับเลี้ยง */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
               <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
@@ -479,7 +472,6 @@ export default function EditPetPage({ params: paramsPromise }) {
                   cursor: "pointer",
                 }}
               >
-                <option value="">{text.unknownGender}</option>
                 <option value="MALE">{text.male}</option>
                 <option value="FEMALE">{text.female}</option>
               </select>
@@ -512,7 +504,6 @@ export default function EditPetPage({ params: paramsPromise }) {
             </div>
           </div>
 
-          {/* ประวัติและอุปนิสัย */}
           <div>
             <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
               {text.descLabel}
@@ -535,7 +526,6 @@ export default function EditPetPage({ params: paramsPromise }) {
             />
           </div>
 
-          {/* ปุ่มบันทึกและยกเลิก */}
           <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
             <button
               type="button"

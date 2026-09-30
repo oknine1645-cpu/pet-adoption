@@ -54,26 +54,20 @@ export async function PUT(request, context) {
       return NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยงที่จะแก้ไข" }, { status: 404 });
     }
 
-    // รองรับทั้งชื่อ field เก่าและใหม่
-    const normalizedBody = {
-      ...body,
-      petTypeId: body.petTypeId ?? body.typeId,
-      ageMonths: body.ageMonths ?? body.age,
-    };
-
-    const { errors = {}, data } = parsePet(normalizedBody);
+    // ตรวจสอบความถูกต้องของข้อมูลผ่าน parsePet
+    const { errors = {}, data } = parsePet(body);
     if (Object.keys(errors).length > 0) {
       const firstError = Object.values(errors).flat()[0] || "ข้อมูลที่กรอกไม่ถูกต้อง";
       return NextResponse.json({ error: firstError, errors }, { status: 400 });
     }
 
-    // ตรวจสอบเงื่อนไขการเปลี่ยนสถานะ
-    const statusError = transitionError(existingPet.status, data.status, body.confirmReopen);
+    // ตรวจสอบ transitionError โดยอิงค่า confirmReopen ที่ส่งมา
+    const statusError = transitionError(existingPet.status, data.status, Boolean(body.confirmReopen));
     if (statusError) {
       return NextResponse.json({ error: statusError }, { status: 400 });
     }
 
-    // อัปเดตเฉพาะคอลัมน์หลักที่ฟอร์มส่งมา (ไม่แตะ weightKg, healthNote, arrivedDate)
+    // อัปเดตข้อมูลเข้าฐานข้อมูล Prisma
     const updatedPet = await prisma.pet.update({
       where: { id },
       data: {
@@ -94,7 +88,7 @@ export async function PUT(request, context) {
     console.error("PUT Pet Error:", e);
 
     if (e?.code === "P2025") {
-      return NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยงตัวนี้ในฐานข้อมูล" }, { status: 404 });
+      return NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยงตัวนี้ในระบบ" }, { status: 404 });
     }
     if (e?.code === "P2003") {
       return NextResponse.json({ error: "ไม่พบประเภทสัตว์นี้ในระบบ" }, { status: 400 });
