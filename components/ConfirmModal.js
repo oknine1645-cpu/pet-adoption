@@ -1,6 +1,32 @@
 "use client";
 
-export default function ConfirmModal({ isOpen, title, message, onConfirm, onClose, loading }) {
+import { useEffect } from "react";
+import { useLanguage } from "@/context/LanguageContext";
+
+export default function ConfirmModal({
+  isOpen,
+  title,
+  message,
+  onConfirm,
+  onClose,
+  loading = false,
+}) {
+  const { t } = useLanguage();
+
+  // 11.4 ดักจับการกดปุ่ม Escape (Esc) เพื่อสั่งปิด Modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handleKeyDown(e) {
+      if (e.key === "Escape" && !loading) {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose, loading]);
+
   if (!isOpen) return null;
 
   return (
@@ -8,87 +34,88 @@ export default function ConfirmModal({ isOpen, title, message, onConfirm, onClos
       style={{
         position: "fixed",
         inset: 0,
-        backgroundColor: "rgba(15, 23, 42, 0.45)",
+        backgroundColor: "rgba(15, 23, 42, 0.6)",
         backdropFilter: "blur(4px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         zIndex: 9999,
-        padding: 16,
+        padding: "16px",
+      }}
+      onClick={(e) => {
+        // คลิกพื้นหลังสีดำเพื่อปิด (ถ้าไม่ได้กำลังโหลด)
+        if (e.target === e.currentTarget && !loading) {
+          onClose();
+        }
       }}
     >
+      {/* 11.4 เพิ่ม role="dialog" และ aria-modal="true" */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-modal-title"
         style={{
-          width: "100%",
-          maxWidth: 420,
           backgroundColor: "#ffffff",
           borderRadius: 20,
           padding: "28px 24px",
-          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
-          animation: "scaleIn 0.15s ease-out",
+          maxWidth: 420,
+          width: "100%",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          textAlign: "center",
         }}
       >
-        <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <div
-            style={{
-              width: 52,
-              height: 52,
-              borderRadius: "50%",
-              backgroundColor: "#fee2e2",
-              color: "#dc2626",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 24,
-              marginBottom: 14,
-            }}
-          >
-            🗑️
-          </div>
-          <h3 style={{ margin: "0 0 6px 0", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>
-            {title || "ยืนยันการทำรายการ"}
-          </h3>
-          <p style={{ margin: 0, fontSize: 14, color: "#64748b", lineHeight: 1.5 }}>
-            {message}
-          </p>
-        </div>
+        <div style={{ fontSize: 44, marginBottom: 12 }}>⚠️</div>
 
-        <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+        <h3
+          id="confirm-modal-title"
+          style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", margin: "0 0 8px 0" }}
+        >
+          {title}
+        </h3>
+
+        <p style={{ fontSize: 14, color: "#64748b", margin: "0 0 24px 0", lineHeight: 1.5 }}>
+          {message}
+        </p>
+
+        <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+          {/* ปุ่มยกเลิก ใช้ t() */}
           <button
             type="button"
-            disabled={loading}
             onClick={onClose}
+            disabled={loading}
             style={{
               flex: 1,
               padding: "11px 16px",
               borderRadius: 10,
               border: "1.5px solid #cbd5e1",
               backgroundColor: "#ffffff",
+              color: "#475569",
               fontSize: 14,
               fontWeight: 600,
-              color: "#475569",
               cursor: loading ? "not-allowed" : "pointer",
             }}
           >
-            ยกเลิก
+            {t("cancel") || "ยกเลิก"}
           </button>
+
+          {/* ปุ่มยืนยัน ใช้ t() */}
           <button
             type="button"
-            disabled={loading}
             onClick={onConfirm}
+            disabled={loading}
             style={{
               flex: 1,
               padding: "11px 16px",
               borderRadius: 10,
               border: "none",
-              backgroundColor: loading ? "#f87171" : "#dc2626",
+              backgroundColor: loading ? "#fca5a5" : "#dc2626",
+              color: "#ffffff",
               fontSize: 14,
               fontWeight: 700,
-              color: "#ffffff",
               cursor: loading ? "not-allowed" : "pointer",
             }}
           >
-            {loading ? "กำลังลบ..." : "ยืนยันการลบ"}
+            {loading ? t("deleting") || "กำลังลบ..." : t("confirm") || "ยืนยันการลบ"}
           </button>
         </div>
       </div>

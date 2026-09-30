@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
+import { isYoung } from "@/lib/rules";
 
 // ฟังก์ชันแปลงอายุตามภาษาที่เลือก
 function formatAge(months, lang, t) {
@@ -16,10 +17,11 @@ function formatAge(months, lang, t) {
 }
 
 export default function HomePage() {
-  const { lang, t } = useLanguage();
+  const { lang, t, formatGender } = useLanguage();
   const [pets, setPets] = useState([]);
   const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   // ตัวกรองและค้นหา
   const [search, setSearch] = useState("");
@@ -31,6 +33,38 @@ export default function HomePage() {
   // ระบบ Favorites
   const [favorites, setFavorites] = useState([]);
 
+  // ฟังก์ชันช่วยแสดงชื่อเพศ
+  const getGenderText = (gender) => {
+    if (formatGender) return formatGender(gender);
+    if (gender === "MALE") return t("male") || "ผู้";
+    if (gender === "FEMALE") return t("female") || "เมีย";
+    return "-";
+  };
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const [petsRes, typesRes] = await Promise.all([
+        fetch("/api/pets?status=AVAILABLE"),
+        fetch("/api/pet-types"),
+      ]);
+
+      if (!petsRes.ok || !typesRes.ok) {
+        setError(true);
+        return;
+      }
+
+      setPets(await petsRes.json());
+      setTypes(await typesRes.json());
+    } catch (err) {
+      console.error("โหลดข้อมูลล้มเหลว:", err);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const savedFavs = localStorage.getItem("pet_favorites");
     if (savedFavs) {
@@ -40,24 +74,8 @@ export default function HomePage() {
         console.error(e);
       }
     }
-
-    async function loadData() {
-      try {
-        const [petsRes, typesRes] = await Promise.all([
-          fetch("/api/pets?status=AVAILABLE"),
-          fetch("/api/pet-types"),
-        ]);
-
-        if (petsRes.ok) setPets(await petsRes.json());
-        if (typesRes.ok) setTypes(await typesRes.json());
-      } catch (err) {
-        console.error("โหลดข้อมูลล้มเหลว:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
     loadData();
-  }, []);
+  }, [loadData]);
 
   function toggleFavorite(id, e) {
     e.preventDefault();
@@ -129,7 +147,6 @@ export default function HomePage() {
           </Link>
 
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {/* ปุ่มบริจาค */}
             <Link
               href="/donate"
               style={{
@@ -144,7 +161,6 @@ export default function HomePage() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
-                transition: "all 0.15s",
               }}
             >
               {t("navDonate")}
@@ -325,12 +341,12 @@ export default function HomePage() {
                 gap: 6,
               }}
             >
-              <span>{showOnlyFavs ? "❤️" : "🤍"}</span>
+              <span>{showOnlyFavs ? "❤️️" : "🤍"}</span>
               <span>{t("favorites")} ({favorites.length})</span>
             </button>
           </div>
 
-          {/* เพศ & จัดเรียง */}
+          {/* เพศ & จัดเรียง (10.2 formatGender) */}
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <select
               value={selectedGender}
@@ -348,8 +364,8 @@ export default function HomePage() {
               }}
             >
               <option value="ALL">{t("allGenders")}</option>
-              <option value="MALE">{t("male")}</option>
-              <option value="FEMALE">{t("female")}</option>
+              <option value="MALE">{getGenderText("MALE")}</option>
+              <option value="FEMALE">{getGenderText("FEMALE")}</option>
             </select>
 
             <select
@@ -374,11 +390,46 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* 4. Grid สัตว์เลี้ยง */}
+        {/* 4. สถานะการแสดงผล Grid (10.4 โหลดข้อมูลไม่สำเร็จ) */}
         {loading ? (
           <div style={{ textAlign: "center", padding: "100px 0", color: "#94a3b8" }}>
             <span style={{ fontSize: 36, display: "block", marginBottom: 12 }}>⏳</span>
             {t("loading")}
+          </div>
+        ) : error ? (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "80px 20px",
+              backgroundColor: "#ffffff",
+              borderRadius: 24,
+              border: "1px dashed #fca5a5",
+              maxWidth: 480,
+              margin: "0 auto",
+            }}
+          >
+            <span style={{ fontSize: 48, display: "block", marginBottom: 12 }}>⚠️</span>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: "#dc2626", margin: "0 0 8px 0" }}>
+              โหลดข้อมูลไม่สำเร็จ
+            </h3>
+            <p style={{ fontSize: 14, color: "#64748b", margin: "0 0 20px 0", lineHeight: 1.5 }}>
+              ไม่สามารถเชื่อมต่อหรือดึงข้อมูลสัตว์เลี้ยงได้ กรุณาลองใหม่อีกครั้ง
+            </p>
+            <button
+              onClick={loadData}
+              style={{
+                padding: "10px 24px",
+                backgroundColor: "#15803d",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: 12,
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              ลองใหม่อีกครั้ง
+            </button>
           </div>
         ) : filteredPets.length === 0 ? (
           <div
@@ -408,114 +459,138 @@ export default function HomePage() {
           >
             {filteredPets.map((pet) => {
               const isFav = favorites.includes(pet.id);
-              const isBaby = (pet.ageMonths || 0) < 2;
+              // 10.3 ป้าย "ยังไม่พร้อมแยกจากแม่"
+              const isBaby = isYoung(pet.ageMonths);
 
               return (
-                <Link
+                /* 10.5 ตัวการ์ดเป็น div ที่มี position: relative */
+                <div
                   key={pet.id}
-                  href={`/pets/${pet.id}`}
-                  style={{ textDecoration: "none", color: "inherit" }}
+                  style={{
+                    backgroundColor: "#ffffff",
+                    borderRadius: 20,
+                    overflow: "hidden",
+                    border: "1px solid #e2e8f0",
+                    boxShadow: "0 4px 14px rgba(0,0,0,0.04)",
+                    display: "flex",
+                    flexDirection: "column",
+                    transition: "transform 0.2s, box-shadow 0.2s",
+                    position: "relative",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-4px)";
+                    e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.08)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.04)";
+                  }}
                 >
+                  {/* Link คลุมทั้งการ์ด (position: absolute, inset: 0, zIndex: 1) */}
+                  <Link
+                    href={`/pets/${pet.id}`}
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      zIndex: 1,
+                    }}
+                    aria-label={`ดูข้อมูล ${pet.name}`}
+                  />
+
+                  {/* รูปภาพ */}
                   <div
                     style={{
-                      backgroundColor: "#ffffff",
-                      borderRadius: 20,
-                      overflow: "hidden",
-                      border: "1px solid #e2e8f0",
-                      boxShadow: "0 4px 14px rgba(0,0,0,0.04)",
-                      display: "flex",
-                      flexDirection: "column",
-                      transition: "transform 0.2s, box-shadow 0.2s",
+                      width: "100%",
+                      height: 220,
+                      backgroundColor: "#f1f5f9",
                       position: "relative",
-                      cursor: "pointer",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-4px)";
-                      e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.08)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.04)";
+                      overflow: "hidden",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                   >
-                    {/* รูปภาพ */}
-                    <div
+                    {pet.imageUrl ? (
+                      <img
+                        src={pet.imageUrl}
+                        alt={pet.name}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: 64 }}>🐾</span>
+                    )}
+
+                    {/* ปุ่ม Favorite วางเป็นพี่น้องที่มี z-index สูงกว่า (zIndex: 5) */}
+                    <button
+                      type="button"
+                      onClick={(e) => toggleFavorite(pet.id, e)}
                       style={{
-                        width: "100%",
-                        height: 220,
-                        backgroundColor: "#f1f5f9",
-                        position: "relative",
-                        overflow: "hidden",
+                        position: "absolute",
+                        top: 12,
+                        right: 12,
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
+                        backgroundColor: "rgba(255,255,255,0.9)",
+                        border: "none",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        cursor: "pointer",
+                        fontSize: 16,
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                        zIndex: 5,
                       }}
                     >
-                      {pet.imageUrl ? (
-                        <img
-                          src={pet.imageUrl}
-                          alt={pet.name}
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        />
-                      ) : (
-                        <span style={{ fontSize: 64 }}>🐾</span>
-                      )}
+                      {isFav ? "❤️" : "🤍"}
+                    </button>
 
-                      <button
-                        type="button"
-                        onClick={(e) => toggleFavorite(pet.id, e)}
+                    {isBaby && (
+                      <div
                         style={{
                           position: "absolute",
-                          top: 12,
-                          right: 12,
-                          width: 36,
-                          height: 36,
-                          borderRadius: "50%",
-                          backgroundColor: "rgba(255,255,255,0.9)",
-                          border: "none",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          cursor: "pointer",
-                          fontSize: 16,
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                          bottom: 12,
+                          left: 12,
+                          backgroundColor: "#fef3c7",
+                          color: "#92400e",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: "4px 10px",
+                          borderRadius: 12,
+                          border: "1px solid #fde68a",
+                          zIndex: 2,
                         }}
                       >
-                        {isFav ? "❤️" : "🤍"}
-                      </button>
+                        {t("babyWarning") || "ยังไม่พร้อมแยกจากแม่"}
+                      </div>
+                    )}
+                  </div>
 
-                      {isBaby && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            bottom: 12,
-                            left: 12,
-                            backgroundColor: "#fef3c7",
-                            color: "#92400e",
-                            fontSize: 11,
-                            fontWeight: 700,
-                            padding: "4px 10px",
-                            borderRadius: 12,
-                            border: "1px solid #fde68a",
-                          }}
-                        >
-                          {t("babyWarning")}
-                        </div>
-                      )}
+                  {/* รายละเอียด */}
+                  <div style={{ padding: "20px", display: "flex", flexDirection: "column", flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                      <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                        {pet.name}
+                      </h3>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#15803d" }}>
+                        {formatAge(pet.ageMonths, lang, t)}
+                      </span>
                     </div>
 
-                    {/* ข้อมูล */}
-                    <div style={{ padding: "20px", display: "flex", flexDirection: "column", flex: 1 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                        <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: 0 }}>
-                          {pet.name}
-                        </h3>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "#15803d" }}>
-                          {formatAge(pet.ageMonths, lang, t)}
-                        </span>
-                      </div>
-
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+                      <span
+                        style={{
+                          backgroundColor: "#f1f5f9",
+                          color: "#475569",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          padding: "3px 8px",
+                          borderRadius: 6,
+                        }}
+                      >
+                        {pet.petType?.name || "Pet"}
+                      </span>
+                      {pet.breed && (
                         <span
                           style={{
                             backgroundColor: "#f1f5f9",
@@ -526,68 +601,54 @@ export default function HomePage() {
                             borderRadius: 6,
                           }}
                         >
-                          {pet.petType?.name || "Pet"}
+                          {pet.breed}
                         </span>
-                        {pet.breed && (
-                          <span
-                            style={{
-                              backgroundColor: "#f1f5f9",
-                              color: "#475569",
-                              fontSize: 12,
-                              fontWeight: 600,
-                              padding: "3px 8px",
-                              borderRadius: 6,
-                            }}
-                          >
-                            {pet.breed}
-                          </span>
-                        )}
-                        <span
-                          style={{
-                            backgroundColor: pet.gender === "MALE" ? "#eff6ff" : "#fdf2f8",
-                            color: pet.gender === "MALE" ? "#2563eb" : "#db2777",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            padding: "3px 8px",
-                            borderRadius: 6,
-                          }}
-                        >
-                          {pet.gender === "MALE" ? t("male") : pet.gender === "FEMALE" ? t("female") : "-"}
-                        </span>
-                      </div>
-
-                      <p
+                      )}
+                      <span
                         style={{
-                          fontSize: 13,
-                          color: "#64748b",
-                          lineHeight: 1.5,
-                          margin: "0 0 18px 0",
-                          display: "-webkit-box",
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                          flex: 1,
+                          backgroundColor: pet.gender === "MALE" ? "#eff6ff" : "#fdf2f8",
+                          color: pet.gender === "MALE" ? "#2563eb" : "#db2777",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          padding: "3px 8px",
+                          borderRadius: 6,
                         }}
                       >
-                        {pet.description || t("defaultDesc")}
-                      </p>
+                        {getGenderText(pet.gender)}
+                      </span>
+                    </div>
 
-                      <div
-                        style={{
-                          padding: "10px",
-                          borderRadius: 10,
-                          backgroundColor: "#f0fdf4",
-                          color: "#166534",
-                          textAlign: "center",
-                          fontSize: 13,
-                          fontWeight: 700,
-                        }}
-                      >
-                        {t("viewMore")}
-                      </div>
+                    <p
+                      style={{
+                        fontSize: 13,
+                        color: "#64748b",
+                        lineHeight: 1.5,
+                        margin: "0 0 18px 0",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                        flex: 1,
+                      }}
+                    >
+                      {pet.description || t("defaultDesc")}
+                    </p>
+
+                    <div
+                      style={{
+                        padding: "10px",
+                        borderRadius: 10,
+                        backgroundColor: "#f0fdf4",
+                        color: "#166534",
+                        textAlign: "center",
+                        fontSize: 13,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {t("viewMore")}
                     </div>
                   </div>
-                </Link>
+                </div>
               );
             })}
           </div>

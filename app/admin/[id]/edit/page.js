@@ -40,7 +40,7 @@ export default function EditPetPage({ params }) {
           const pet = await petRes.json();
           setForm({
             name: pet.name || "",
-            typeId: pet.typeId || "",
+            typeId: pet.typeId || pet.petTypeId || "",
             breed: pet.breed || "",
             ageMonths: pet.ageMonths ?? 0,
             gender: pet.gender || "MALE",
@@ -136,6 +136,8 @@ export default function EditPetPage({ params }) {
       router.refresh();
     } catch (err) {
       setError(err.message);
+    } finally {
+      // 11.3 setSaving(false) เสมอ
       setSaving(false);
     }
   }

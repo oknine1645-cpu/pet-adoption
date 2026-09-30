@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
-
 :root {
   --bg-main: #fbfbf9;
   --surface: #ffffff;
@@ -22,7 +20,7 @@
 }
 
 body {
-  font-family: 'Prompt', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: inherit;
   background-color: var(--bg-main);
   color: var(--text-main);
   line-height: 1.6;
