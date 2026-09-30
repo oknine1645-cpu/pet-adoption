@@ -90,6 +90,24 @@ export default function HomePage() {
     localStorage.setItem("pet_favorites", JSON.stringify(updated));
   }
 
+  // จัดเรียงหมวดหมู่: ให้ สุนัข และ แมว ขึ้นก่อน และดัน "อื่นๆ" ไปไว้ท้ายสุดเสมอ
+  const sortedTypes = useMemo(() => {
+    return [...types].sort((a, b) => {
+      const isOtherA = a.name === "อื่นๆ" || a.name?.toLowerCase() === "other";
+      const isOtherB = b.name === "อื่นๆ" || b.name?.toLowerCase() === "other";
+
+      if (isOtherA) return 1;
+      if (isOtherB) return -1;
+
+      const priority = { สุนัข: 1, แมว: 2, Dog: 1, Cat: 2 };
+      const pA = priority[a.name] || 99;
+      const pB = priority[b.name] || 99;
+      if (pA !== pB) return pA - pB;
+
+      return a.name.localeCompare(b.name, "th");
+    });
+  }, [types]);
+
   const filteredPets = useMemo(() => {
     return pets
       .filter((pet) => {
@@ -303,7 +321,7 @@ export default function HomePage() {
             >
               {t("allCategories")}
             </button>
-            {types.map((tp) => (
+            {sortedTypes.map((tp) => (
               <button
                 key={tp.id}
                 onClick={() => setSelectedType(String(tp.id))}
@@ -341,12 +359,12 @@ export default function HomePage() {
                 gap: 6,
               }}
             >
-              <span>{showOnlyFavs ? "❤️️" : "🤍"}</span>
+              <span>{showOnlyFavs ? "❤" : "🤍"}</span>
               <span>{t("favorites")} ({favorites.length})</span>
             </button>
           </div>
 
-          {/* เพศ & จัดเรียง (10.2 formatGender) */}
+          {/* เพศ & จัดเรียง */}
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <select
               value={selectedGender}
@@ -390,7 +408,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* 4. สถานะการแสดงผล Grid (10.4 โหลดข้อมูลไม่สำเร็จ) */}
+        {/* 4. สถานะการแสดงผล Grid */}
         {loading ? (
           <div style={{ textAlign: "center", padding: "100px 0", color: "#94a3b8" }}>
             <span style={{ fontSize: 36, display: "block", marginBottom: 12 }}>⏳</span>
@@ -459,11 +477,9 @@ export default function HomePage() {
           >
             {filteredPets.map((pet) => {
               const isFav = favorites.includes(pet.id);
-              // 10.3 ป้าย "ยังไม่พร้อมแยกจากแม่"
               const isBaby = isYoung(pet.ageMonths);
 
               return (
-                /* 10.5 ตัวการ์ดเป็น div ที่มี position: relative */
                 <div
                   key={pet.id}
                   style={{
@@ -486,7 +502,6 @@ export default function HomePage() {
                     e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.04)";
                   }}
                 >
-                  {/* Link คลุมทั้งการ์ด (position: absolute, inset: 0, zIndex: 1) */}
                   <Link
                     href={`/pets/${pet.id}`}
                     style={{
@@ -520,7 +535,6 @@ export default function HomePage() {
                       <span style={{ fontSize: 64 }}>🐾</span>
                     )}
 
-                    {/* ปุ่ม Favorite วางเป็นพี่น้องที่มี z-index สูงกว่า (zIndex: 5) */}
                     <button
                       type="button"
                       onClick={(e) => toggleFavorite(pet.id, e)}
