@@ -31,10 +31,10 @@ export async function GET(request, { params }) {
   }
 }
 
-// อัปเดตข้อมูลสัตว์เลี้ยง
+// อัปเดตข้อมูลสัตว์เลี้ยง (PUT)
 export async function PUT(request, { params }) {
   try {
-    // 1. ตรวจสอบสิทธิ์ Admin
+    // ตรวจสอบสิทธิ์ Admin
     const { error } = await requireAdmin();
     if (error) return error;
 
@@ -50,26 +50,26 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "ข้อมูลที่ส่งมาไม่ถูกต้อง" }, { status: 400 });
     }
 
-    // 2. ดึงข้อมูลเดิมมาตรวจสถานะ
+    // ตรวจสอบว่ามีสัตว์เลี้ยงตัวนี้อยู่จริงหรือไม่
     const existingPet = await prisma.pet.findUnique({ where: { id } });
     if (!existingPet) {
       return NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยงที่จะแก้ไข" }, { status: 404 });
     }
 
-    // 3. ตรวจสอบความถูกต้องของข้อมูล
+    // ตรวจสอบความถูกต้องของข้อมูลผ่าน parsePet
     const { errors = {}, data } = parsePet(body);
     if (Object.keys(errors).length > 0) {
       const firstError = Object.values(errors).flat()[0] || "ข้อมูลที่กรอกไม่ถูกต้อง";
       return NextResponse.json({ error: firstError, errors }, { status: 400 });
     }
 
-    // ตรวจสอบกฎการเปลี่ยนสถานะ (ป้องกันเปลี่ยนจาก ADOPTED กลับเป็น AVAILABLE โดยไม่ยืนยัน)
+    // ป้องกันการเปลี่ยนสถานะจาก ADOPTED กลับไปเป็น AVAILABLE โดยไม่ยืนยัน
     const statusError = transitionError(existingPet.status, data.status, body.confirmReopen);
     if (statusError) {
       return NextResponse.json({ error: statusError }, { status: 400 });
     }
 
-    // 4. บันทึกเฉพาะฟิลด์ที่มีในตารางฐานข้อมูลจริงเท่านั้น
+    // บันทึกลงฐานข้อมูลเฉพาะฟิลด์ที่มีใน Schema จริงเท่านั้น
     const updatedPet = await prisma.pet.update({
       where: { id },
       data: {
@@ -100,12 +100,12 @@ export async function PUT(request, { params }) {
   }
 }
 
-// รองรับทั้ง PUT และ PATCH จากหน้าฟอร์ม
+// รองรับ PATCH
 export async function PATCH(request, context) {
   return PUT(request, context);
 }
 
-// ลบข้อมูลสัตว์เลี้ยง
+// ลบข้อมูลสัตว์เลี้ยง (DELETE)
 export async function DELETE(request, { params }) {
   try {
     const { error } = await requireAdmin();
