@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 
-// ฟังก์ชันช่วยอ่าน JSON อย่างปลอดภัย ป้องกัน Unexpected end of JSON input
+// อ่าน response แบบปลอดภัย: ถ้า body ว่างหรือไม่ใช่ JSON จะไม่พัง
 async function readJsonSafe(res) {
+  const raw = await res.text();
+  let data = null;
   try {
-    const text = await res.text();
-    return text ? JSON.parse(text) : {};
-  } catch (e) {
-    return {};
-  }
+    data = raw ? JSON.parse(raw) : null;
+  } catch {}
+  return { raw, data };
 }
 
 // ฟังก์ชันแปลงชื่อประเภทสัตว์ 2 ภาษา
@@ -33,13 +33,13 @@ function formatPetTypeName(name, lang) {
 
 export default function NewPetPage() {
   const router = useRouter();
-  const { lang } = useLanguage();
+  const { lang, toggleLanguage } = useLanguage();
   const isEn = lang === "en";
 
   const [types, setTypes] = useState([]);
   const [form, setForm] = useState({
     name: "",
-    petTypeId: "",
+    typeId: "",
     breed: "",
     ageMonths: "",
     gender: "MALE",
@@ -51,6 +51,7 @@ export default function NewPetPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // ข้อความ 2 ภาษา
   const text = {
     backToAdmin: isEn ? "← Back to Admin Dashboard" : "← กลับหน้าจัดการระบบ",
     pageTitle: isEn ? "➕ Add New Pet" : "➕ เพิ่มข้อมูลสัตว์เลี้ยงใหม่",
@@ -75,6 +76,7 @@ export default function NewPetPage() {
     genderLabel: isEn ? "Gender" : "เพศ",
     male: isEn ? "Male (MALE)" : "เพศผู้ (Male)",
     female: isEn ? "Female (FEMALE)" : "เพศเมีย (Female)",
+    unknownGender: isEn ? "Unknown" : "ไม่ระบุ",
     statusLabel: isEn ? "Adoption Status" : "สถานะการรับเลี้ยง",
     statusAvailable: isEn ? "Available (AVAILABLE)" : "พร้อมรับเลี้ยง (AVAILABLE)",
     statusPending: isEn ? "Pending (PENDING)" : "รอพิจารณา (PENDING)",
@@ -102,11 +104,11 @@ export default function NewPetPage() {
       try {
         const res = await fetch("/api/pet-types");
         if (res.ok) {
-          const data = await readJsonSafe(res);
+          const { data } = await readJsonSafe(res);
           if (Array.isArray(data)) {
             setTypes(data);
             if (data.length > 0) {
-              setForm((prev) => ({ ...prev, petTypeId: String(data[0].id) }));
+              setForm((prev) => ({ ...prev, typeId: String(data[0].id) }));
             }
           }
         }
@@ -130,11 +132,11 @@ export default function NewPetPage() {
       const pB = priority[b.name] || 99;
       if (pA !== pB) return pA - pB;
 
-      return (a.name || "").localeCompare(b.name || "", "th");
+      return a.name.localeCompare(b.name, "th");
     });
   }, [types]);
 
-  // ฟังก์ชันอัปโหลดรูปภาพ
+  // ฟังก์ชันอัปโหลดไฟล์รูปภาพจากในเครื่อง
   async function handleImageFileChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -156,20 +158,22 @@ export default function NewPetPage() {
         body: formData,
       });
 
-      const data = await readJsonSafe(res);
-      if (res.ok && data.url) {
+      const { raw, data } = await readJsonSafe(res);
+
+      if (res.ok && data?.url) {
         setForm((prev) => ({ ...prev, imageUrl: data.url }));
       } else {
-        setError(data.error || text.uploadError);
+        console.error("POST /api/upload failed:", res.status, res.url, raw);
+        setError(data?.error || `${text.uploadError} (HTTP ${res.status})`);
       }
     } catch (err) {
+      console.error("Upload error:", err);
       setError(text.serverUploadError);
     } finally {
       setUploading(false);
     }
   }
 
-  // ส่งข้อมูลบันทึกสัตว์เลี้ยง
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
@@ -179,7 +183,7 @@ export default function NewPetPage() {
       return;
     }
 
-    if (!form.petTypeId) {
+    if (!form.typeId) {
       setError(text.typeRequired);
       return;
     }
@@ -187,13 +191,14 @@ export default function NewPetPage() {
     setLoading(true);
 
     try {
-      const resolvedTypeId = parseInt(form.petTypeId, 10);
+      const resolvedTypeId = parseInt(form.typeId, 10);
       const resolvedAge = form.ageMonths !== "" ? parseInt(form.ageMonths, 10) : 0;
 
+      // ส่งทั้ง typeId และ petTypeId เป็นตัวเลข ป้องกัน Schema ไม่ตรงกัน
       const payload = {
         name: form.name.trim(),
-        petTypeId: resolvedTypeId,
         typeId: resolvedTypeId,
+        petTypeId: resolvedTypeId,
         breed: form.breed.trim() || null,
         ageMonths: isNaN(resolvedAge) ? 0 : resolvedAge,
         gender: form.gender,
@@ -208,15 +213,15 @@ export default function NewPetPage() {
         body: JSON.stringify(payload),
       });
 
-      // อ่านผลลัพธ์ผ่าน readJsonSafe เพื่อป้องกันปัญหา body ว่างเปล่า
-      const data = await readJsonSafe(res);
+      // อ่านแบบปลอดภัย: body ว่างจะไม่ทำให้ "Unexpected end of JSON input"
+      const { raw, data } = await readJsonSafe(res);
 
       if (!res.ok) {
-        const errMsg =
-          data.error ||
-          (data.errors && Object.values(data.errors).flat()[0]) ||
-          text.saveError;
-        throw new Error(errMsg);
+        console.error("POST /api/pets failed:", res.status, res.url, raw);
+        const fieldErrors = data?.errors ? Object.values(data.errors).join(", ") : "";
+        throw new Error(
+          data?.error || fieldErrors || `${text.saveError} (HTTP ${res.status})`
+        );
       }
 
       router.push("/admin");
@@ -230,8 +235,15 @@ export default function NewPetPage() {
 
   return (
     <div style={{ maxWidth: 680, margin: "0 auto", paddingBottom: 60 }}>
-      {/* ลิงก์ย้อนกลับ (เอาปุ่มสลับภาษาด้านบนออกแล้ว) */}
-      <div style={{ marginBottom: 20 }}>
+      {/* แถบด้านบน: ลิงก์ย้อนกลับ และ ปุ่มสลับภาษา */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 20,
+        }}
+      >
         <Link
           href="/admin"
           style={{
@@ -246,6 +258,31 @@ export default function NewPetPage() {
         >
           {text.backToAdmin}
         </Link>
+
+        {/* ปุ่มสลับภาษา TH / EN บนหัวฟอร์ม */}
+        <button
+          type="button"
+          onClick={toggleLanguage}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 14px",
+            borderRadius: 20,
+            backgroundColor: "#ffffff",
+            border: "1.5px solid #cbd5e1",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            color: "#334155",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+          }}
+        >
+          <span>🌐</span>
+          <span style={{ color: lang === "th" ? "#15803d" : "#94a3b8" }}>TH</span>
+          <span style={{ color: "#cbd5e1" }}>/</span>
+          <span style={{ color: lang === "en" ? "#15803d" : "#94a3b8" }}>EN</span>
+        </button>
       </div>
 
       <div
@@ -284,7 +321,7 @@ export default function NewPetPage() {
         )}
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {/* อัปโหลดรูปภาพ */}
+          {/* ช่องเลือกรูปภาพจากในเครื่อง */}
           <div>
             <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 8 }}>
               {text.imageLabel}
@@ -303,6 +340,7 @@ export default function NewPetPage() {
                   justifyContent: "center",
                   overflow: "hidden",
                   flexShrink: 0,
+                  position: "relative",
                 }}
               >
                 {form.imageUrl ? (
@@ -337,6 +375,7 @@ export default function NewPetPage() {
                     fontWeight: 600,
                     color: "#334155",
                     cursor: uploading ? "not-allowed" : "pointer",
+                    transition: "all 0.15s",
                   }}
                 >
                   {uploading ? text.uploading : text.choosePhoto}
@@ -394,9 +433,8 @@ export default function NewPetPage() {
                 {text.typeLabel}
               </label>
               <select
-                required
-                value={form.petTypeId}
-                onChange={(e) => setForm({ ...form, petTypeId: e.target.value })}
+                value={form.typeId}
+                onChange={(e) => setForm({ ...form, typeId: e.target.value })}
                 style={{
                   width: "100%",
                   padding: "11px 14px",
@@ -409,7 +447,6 @@ export default function NewPetPage() {
                   cursor: "pointer",
                 }}
               >
-                <option value="">{text.selectType}</option>
                 {sortedTypes.map((t) => (
                   <option key={t.id} value={t.id}>
                     {formatPetTypeName(t.name, lang)}
@@ -489,6 +526,7 @@ export default function NewPetPage() {
               >
                 <option value="MALE">{text.male}</option>
                 <option value="FEMALE">{text.female}</option>
+                <option value="UNKNOWN">{text.unknownGender}</option>
               </select>
             </div>
 

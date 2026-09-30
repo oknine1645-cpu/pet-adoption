@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 
-// ฟังก์ชันช่วยอ่าน JSON อย่างปลอดภัย ป้องกัน Unexpected end of JSON input
+// อ่าน response แบบปลอดภัย ป้องกัน Unexpected end of JSON input
 async function readJsonSafe(res) {
   try {
-    const text = await res.text();
-    return text ? JSON.parse(text) : {};
+    const raw = await res.text();
+    return raw ? JSON.parse(raw) : {};
   } catch (e) {
     return {};
   }
@@ -48,7 +48,7 @@ export default function EditPetPage({ params: paramsPromise }) {
     petTypeId: "",
     breed: "",
     ageMonths: "",
-    gender: "MALE",
+    gender: "",
     status: "AVAILABLE",
     description: "",
     imageUrl: "",
@@ -74,6 +74,7 @@ export default function EditPetPage({ params: paramsPromise }) {
     genderLabel: isEn ? "Gender" : "เพศ",
     male: isEn ? "Male (MALE)" : "เพศผู้ (Male)",
     female: isEn ? "Female (FEMALE)" : "เพศเมีย (Female)",
+    unknownGender: isEn ? "Unknown" : "ไม่ระบุ",
     statusLabel: isEn ? "Adoption Status" : "สถานะการรับเลี้ยง",
     statusAvailable: isEn ? "Available (AVAILABLE)" : "พร้อมรับเลี้ยง (AVAILABLE)",
     statusPending: isEn ? "Pending (PENDING)" : "รอพิจารณา (PENDING)",
@@ -111,7 +112,7 @@ export default function EditPetPage({ params: paramsPromise }) {
           petTypeId: String(petData.petTypeId || petData.typeId || ""),
           breed: petData.breed || "",
           ageMonths: petData.ageMonths ?? "",
-          gender: petData.gender || "MALE",
+          gender: petData.gender || "", // เก็บค่าว่างไว้ ไม่บังคับเป็นเพศผู้
           status: petData.status || "AVAILABLE",
           description: petData.description || "",
           imageUrl: petData.imageUrl || "",
@@ -124,6 +125,7 @@ export default function EditPetPage({ params: paramsPromise }) {
       }
     }
     initData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
   // จัดลำดับประเภทสัตว์: สุนัข -> แมว -> อื่นๆ ท้ายสุด
@@ -162,7 +164,10 @@ export default function EditPetPage({ params: paramsPromise }) {
 
       const result = await readJsonSafe(res);
       if (!res.ok || !result.url) {
-        throw new Error(result.error || (isEn ? "Failed to upload image" : "อัปโหลดรูปภาพไม่สำเร็จ"));
+        throw new Error(
+          result.error ||
+            `${isEn ? "Failed to upload image" : "อัปโหลดรูปภาพไม่สำเร็จ"} (HTTP ${res.status})`
+        );
       }
 
       setForm((prev) => ({ ...prev, imageUrl: result.url }));
@@ -190,7 +195,7 @@ export default function EditPetPage({ params: paramsPromise }) {
         typeId: resolvedTypeId,
         breed: form.breed.trim() || null,
         ageMonths: isNaN(resolvedAge) ? 0 : resolvedAge,
-        gender: form.gender,
+        gender: form.gender || null,
         status: form.status,
         description: form.description.trim() || null,
         imageUrl: form.imageUrl.trim() || null,
@@ -205,11 +210,11 @@ export default function EditPetPage({ params: paramsPromise }) {
       const data = await readJsonSafe(res);
 
       if (!res.ok) {
-        // ดึง Error จากเซิร์ฟเวอร์มาแสดงตรงๆ ให้เห็นชัดเจน
+        console.error("PUT /api/pets failed:", res.status, data);
         const errMsg =
           data.error ||
           (data.errors && Object.values(data.errors).flat()[0]) ||
-          text.saveError;
+          `${text.saveError} (HTTP ${res.status})`;
         throw new Error(errMsg);
       }
 
@@ -474,6 +479,7 @@ export default function EditPetPage({ params: paramsPromise }) {
                   cursor: "pointer",
                 }}
               >
+                <option value="">{text.unknownGender}</option>
                 <option value="MALE">{text.male}</option>
                 <option value="FEMALE">{text.female}</option>
               </select>

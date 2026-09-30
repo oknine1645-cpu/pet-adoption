@@ -54,7 +54,7 @@ export async function PUT(request, context) {
       return NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยงที่จะแก้ไข" }, { status: 404 });
     }
 
-    // แปลง typeId และ age เป็นตัวเลขป้องกัน Type Mismatch
+    // รองรับทั้งชื่อ field เก่าและใหม่
     const normalizedBody = {
       ...body,
       petTypeId: body.petTypeId ?? body.typeId,
@@ -73,18 +73,18 @@ export async function PUT(request, context) {
       return NextResponse.json({ error: statusError }, { status: 400 });
     }
 
-    // อัปเดตเฉพาะคอลัมน์ที่มีใน Schema จริง
+    // อัปเดตเฉพาะคอลัมน์หลักที่ฟอร์มส่งมา (ไม่แตะ weightKg, healthNote, arrivedDate)
     const updatedPet = await prisma.pet.update({
       where: { id },
       data: {
         name: data.name,
-        petTypeId: parseInt(data.petTypeId, 10),
+        petTypeId: data.petTypeId,
         status: data.status,
         gender: data.gender,
-        ageMonths: parseInt(data.ageMonths, 10),
-        breed: data.breed || null,
-        description: data.description || null,
-        imageUrl: data.imageUrl || null,
+        ageMonths: data.ageMonths,
+        breed: data.breed,
+        description: data.description,
+        imageUrl: data.imageUrl,
       },
       include: { petType: true },
     });
