@@ -56,24 +56,23 @@ export async function POST(request) {
       return NextResponse.json({ error: "ข้อมูลที่ส่งมาไม่ถูกต้อง" }, { status: 400 });
     }
 
-    // 1. แปลงความเข้ากันได้ระหว่าง typeId และ petTypeId ให้เป็นตัวเลข
+    // แปลง typeId และอายุ ageMonths ให้เป็นตัวเลข Int ชัวร์ๆ
     const normalizedTypeId = Number(rawBody.petTypeId || rawBody.typeId);
-    const normalizedAge = rawBody.ageMonths !== undefined && rawBody.ageMonths !== "" 
-      ? Number(rawBody.ageMonths) 
-      : 0;
+    const parsedAge = Number(rawBody.ageMonths ?? rawBody.age ?? 0);
+    const resolvedAge = isNaN(parsedAge) ? 0 : parsedAge;
 
     const body = {
       ...rawBody,
       petTypeId: isNaN(normalizedTypeId) ? undefined : normalizedTypeId,
       typeId: isNaN(normalizedTypeId) ? undefined : normalizedTypeId,
-      ageMonths: isNaN(normalizedAge) ? 0 : normalizedAge,
+      ageMonths: resolvedAge,
+      age: resolvedAge,
     };
 
-    // 2. ตรวจสอบเงื่อนไขตามกฎด้วย parsePet
+    // ตรวจสอบข้อมูลด้วย parsePet
     const { errors = {}, data } = parsePet(body);
 
     if (Object.keys(errors).length > 0) {
-      // ดึงข้อความ error ตัวแรกมาแสดงเป็นประโยคชัดเจน
       const firstErrorMessage = Object.values(errors).flat()[0] || "ข้อมูลที่กรอกไม่ถูกต้อง";
       return NextResponse.json(
         { error: firstErrorMessage, errors },
@@ -81,10 +80,11 @@ export async function POST(request) {
       );
     }
 
-    // 3. ตรวจสอบว่าใน data มี petTypeId แน่นอน
+    // รวมข้อมูลและบังคับใส่ ageMonths ให้ Prisma
     const petData = {
       ...data,
-      petTypeId: data.petTypeId || normalizedTypeId,
+      petTypeId: data?.petTypeId || normalizedTypeId,
+      ageMonths: resolvedAge, // ส่ง ageMonths ให้ตรงกับ Schema บังคับ
     };
 
     const pet = await prisma.pet.create({
