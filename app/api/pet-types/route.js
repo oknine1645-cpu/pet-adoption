@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-guard";
 
-// 1. ดึงประเภทสัตว์ทั้งหมด (ถ้ายังไม่มี จะเพิ่ม สุนัข แมว กระต่าย นก ให้อัตโนมัติ)
+// 1. ดึงประเภทสัตว์ทั้งหมด (คนทั่วไปดูได้)
 export async function GET() {
   try {
     let types = await prisma.petType.findMany({
@@ -10,7 +11,7 @@ export async function GET() {
 
     // หากฐานข้อมูลยังว่างเปล่า ให้สร้างข้อมูลเริ่มต้นให้อัตโนมัติทันที
     if (types.length === 0) {
-      const defaultTypes = ["สุนัข", "แมว", "กระต่าย", "นก"];
+      const defaultTypes = ["สุนัข", "แมว", "กระต่าย", "นก", "อื่นๆ"];
       for (const name of defaultTypes) {
         await prisma.petType.create({
           data: { name },
@@ -31,9 +32,14 @@ export async function GET() {
   }
 }
 
-// 2. บันทึกประเภทสัตว์ใหม่
+// 2. บันทึกประเภทสัตว์ใหม่ (เฉพาะแอดมินเท่านั้น)
 export async function POST(request) {
   try {
+    // --- 1. ตรวจสอบสิทธิ์แอดมินก่อนเป็นอันดับแรก ---
+    const { error } = await requireAdmin();
+    if (error) return error; // ถ้าไม่ใช่แอดมิน จะถูกบล็อกทันทีตั้งแต่ตรงนี้
+    // ----------------------------------------
+
     const body = await request.json();
     const { name } = body;
 

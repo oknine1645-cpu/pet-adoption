@@ -1,127 +1,84 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
-import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
+
+const norm = (e) => String(e ?? "").trim().toLowerCase();
+const ADMIN_EMAIL = norm(process.env.ADMIN_EMAIL);
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 7 },
   trustHost: true,
-  secret: process.env.AUTH_SECRET || "baanpakjai-secret-key-production-32chars",
-  
-  cookies: {
-    sessionToken: {
-      name: "baanpakjai_session",
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: process.env.NODE_ENV === "production",
-      },
-    },
-  },
-
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
-
+  pages: { signIn: "/login", error: "/login" },
   providers: [
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
-      authorization: {
-        params: {
-          prompt: "select_account",
-          access_type: "offline",
-          response_type: "code",
-        },
-      },
+      authorization: { params: { prompt: "select_account" } },
     }),
     Credentials({
-      name: "Credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
+      credentials: { email: {}, password: {} },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
-
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        });
-
-        if (!user || !user.password) return null;
-
-        const isValid = await bcrypt.compare(credentials.password, user.password);
-        if (!isValid) return null;
-
-        return {
-          id: String(user.id),
-          name: user.name,
-          email: user.email,
-          role: user.role || "USER",
-        };
+        const email = norm(credentials?.email);
+        const password = String(credentials?.password ?? "");
+        if (!email || !password) return null;
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user?.password) return null;
+        if (!(await bcrypt.compare(password, user.password))) return null;
+        return { id: user.id, name: user.name, email: user.email };
       },
     }),
   ],
-
   callbacks: {
-    async signIn({ user, account }) {
-      if (account?.provider === "google") {
-        try {
-          const adminEmail = process.env.ADMIN_EMAIL;
-          const assignedRole = user.email === adminEmail ? "ADMIN" : "USER";
-
-          const existingUser = await prisma.user.findUnique({
-            where: { email: user.email },
+    async signIn({ user, account, profile }) {
+      if (account?.provider !== "google") return true;
+      const email = norm(user.email);
+      if (!email || profile?.email_verified !== true) return false;
+      try {
+        const existing = await prisma.user.findUnique({ where: { email } });
+        const isAdminEmail = email === ADMIN_EMAIL;
+        if (!existing) {
+          await prisma.user.create({
+            data: {
+              email,
+              name: user.name || "Google User",
+              image: user.image || null,
+              emailVerified: new Date(),
+              role: isAdminEmail ? "ADMIN" : "USER",
+            },
           });
-
-          if (!existingUser) {
-            await prisma.user.create({
-              data: {
-                name: user.name || "Google User",
-                email: user.email,
-                image: user.image || null,
-                role: assignedRole,
-              },
-            });
-          } else if (user.email === adminEmail && existingUser.role !== "ADMIN") {
-            await prisma.user.update({
-              where: { email: user.email },
-              data: { role: "ADMIN" },
-            });
+        } else {
+          const patch = {};
+          // ถ้าบัญชีถูกสร้างด้วยรหัสผ่านที่ไม่เคยยืนยันอีเมล ให้ล้างรหัสผ่าน (กัน pre-hijacking)
+          if (existing.password && !existing.emailVerified) patch.password = null;
+          if (!existing.emailVerified) patch.emailVerified = new Date();
+          if (isAdminEmail && existing.role !== "ADMIN") patch.role = "ADMIN";
+          if (Object.keys(patch).length) {
+            await prisma.user.update({ where: { email }, data: patch });
           }
-          return true;
-        } catch (error) {
-          console.error("Google signIn error:", error);
-          return false;
         }
+        return true;
+      } catch (e) {
+        console.error("Google signIn error:", e);
+        return false;
       }
-      return true;
     },
-
     async jwt({ token, user }) {
       if (user) {
-        token.id = String(user.id);
-      }
-      if (token.email) {
-        const adminEmail = process.env.ADMIN_EMAIL;
-        if (token.email === adminEmail) {
-          token.role = "ADMIN";
-        } else {
-          const dbUser = await prisma.user.findUnique({
-            where: { email: token.email },
-            select: { role: true },
-          });
-          token.role = dbUser?.role || "USER";
-        }
+        const email = norm(user.email);
+        const db = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true, role: true },
+        });
+        token.id = db?.id ?? null;
+        token.role = db?.role ?? "USER";
+        token.email = email;
       }
       return token;
     },
-
     async session({ session, token }) {
-      if (token && session.user) {
+      if (session.user) {
         session.user.id = token.id;
         session.user.role = token.role || "USER";
       }
