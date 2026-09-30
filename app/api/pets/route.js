@@ -1,73 +1,19 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth"; // หรือพาธที่โปรเจกต์คุณใช้เรียก session
 
-export async function GET(request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status") || "AVAILABLE";
-    const typeId = searchParams.get("typeId");
-    const q = searchParams.get("q") || "";
+export async function POST(req) {
+  // --- 1. แทรกท่อนตรวจสิทธิ์ไว้บนสุดตรงนี้ ---
+  const session = await auth();
+  const isAdmin =
+    session?.user?.role === "ADMIN" ||
+    session?.user?.email === process.env.ADMIN_EMAIL;
 
-    const where = {};
-
-    if (status !== "ALL") {
-      where.status = status;
-    }
-
-    if (typeId) {
-      where.petTypeId = Number(typeId);
-    }
-
-    if (q) {
-      where.name = { contains: q };
-    }
-
-    const pets = await prisma.pet.findMany({
-      where,
-      include: { petType: true },
-      orderBy: { createdAt: "desc" },
-    });
-
-    return NextResponse.json(pets);
-  } catch (error) {
-    console.error("GET Pets Error:", error);
-    return NextResponse.json({ error: "ไม่สามารถดึงข้อมูลสัตว์ได้" }, { status: 500 });
+  if (!isAdmin) {
+    return NextResponse.json({ error: "ไม่มีสิทธิ์เข้าถึง (Unauthorized)" }, { status: 401 });
   }
-}
+  // ----------------------------------------
 
-export async function POST(request) {
-  try {
-    const body = await request.json();
-    const { name, typeId, petTypeId, breed, ageMonths, gender, status, imageUrl, description } = body;
-
-    const targetTypeId = Number(typeId || petTypeId);
-
-    if (!name || !targetTypeId) {
-      return NextResponse.json(
-        { error: "กรุณาระบุชื่อและประเภทของสัตว์เลี้ยง" },
-        { status: 400 }
-      );
-    }
-
-    const newPet = await prisma.pet.create({
-      data: {
-        name: name.trim(),
-        petTypeId: targetTypeId,
-        breed: breed ? breed.trim() : null,
-        ageMonths: Number(ageMonths) || 0,
-        gender: gender || "MALE",
-        status: status || "AVAILABLE",
-        imageUrl: imageUrl || null,
-        description: description ? description.trim() : null,
-      },
-    });
-
-    return NextResponse.json(newPet, { status: 201 });
-  } catch (error) {
-    console.error("POST Pet Error:", error);
-    return NextResponse.json(
-      { error: "ไม่สามารถบันทึกข้อมูลสัตว์เลี้ยงได้: " + error.message },
-      { status: 500 }
-    );
-  }
+  // โค้ดเดิมของคุณที่ใช้บันทึกข้อมูลสัตว์เลี้ยง (Prisma create ฯลฯ) ปล่อยทำงานต่อตามปกติ
+  const body = await req.json();
+  // ...
 }

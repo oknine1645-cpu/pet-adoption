@@ -24,6 +24,17 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+    if (email.toLowerCase() === process.env.ADMIN_EMAIL?.toLowerCase()) {
+  return NextResponse.json({ error: "อีเมลนี้สงวนไว้สำหรับผู้ดูแลระบบ" }, { status: 400 });
+}
+    const newUser = await prisma.user.create({
+  data: {
+    name,
+    email,
+    password: hashedPassword,
+    role: "USER", // บังคับสิทธิ์เป็น USER เสมอ
+  },
+});
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
