@@ -24,7 +24,7 @@ function formatPetTypeName(name, lang) {
 export default function EditPetPage({ params: paramsPromise }) {
   const params = use(paramsPromise);
   const router = useRouter();
-  const { lang, toggleLanguage } = useLanguage();
+  const { lang } = useLanguage();
   const isEn = lang === "en";
 
   const [types, setTypes] = useState([]);
@@ -47,7 +47,7 @@ export default function EditPetPage({ params: paramsPromise }) {
   // พจนานุกรมข้อความ 2 ภาษาสำหรับหน้าแก้ไข
   const text = {
     backToAdmin: isEn ? "← Back to Admin Dashboard" : "← กลับหน้าจัดการระบบ",
-    pageTitle: isEn ? "✏️ Edit Pet Information" : "✏️️ แก้ไขข้อมูลสัตว์เลี้ยง",
+    pageTitle: isEn ? "✏️ Edit Pet Information" : "✏️ แก้ไขข้อมูลสัตว์เลี้ยง",
     pageSubtitle: (name) =>
       isEn
         ? `Update details, status, or change photo for ${name || "pet"}`
@@ -205,15 +205,8 @@ export default function EditPetPage({ params: paramsPromise }) {
 
   return (
     <div style={{ maxWidth: 720, margin: "40px auto", padding: "0 20px" }}>
-      {/* แถบด้านบน: ลิงก์ย้อนกลับ และ ปุ่มสลับภาษา */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 20,
-        }}
-      >
+      {/* ลิงก์ย้อนกลับ */}
+      <div style={{ marginBottom: 20 }}>
         <Link
           href="/admin"
           style={{
@@ -228,31 +221,6 @@ export default function EditPetPage({ params: paramsPromise }) {
         >
           {text.backToAdmin}
         </Link>
-
-        {/* ปุ่มสลับภาษา TH / EN บนหัวฟอร์มโดยตรง */}
-        <button
-          type="button"
-          onClick={toggleLanguage}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "6px 14px",
-            borderRadius: 20,
-            backgroundColor: "#ffffff",
-            border: "1.5px solid #cbd5e1",
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: "pointer",
-            color: "#334155",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-          }}
-        >
-          <span>🌐</span>
-          <span style={{ color: lang === "th" ? "#15803d" : "#94a3b8" }}>TH</span>
-          <span style={{ color: "#cbd5e1" }}>/</span>
-          <span style={{ color: lang === "en" ? "#15803d" : "#94a3b8" }}>EN</span>
-        </button>
       </div>
 
       <div
