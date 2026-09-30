@@ -1,98 +1,76 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-guard";
+import { requireAdmin, isAdmin } from "@/lib/auth-guard";
 import { parsePet, transitionError } from "@/lib/rules";
 
-// ฟังก์ชันแปลง id ให้รองรับทั้งแบบตัวเลขและ CUID
-function parseId(rawId) {
-  return isNaN(Number(rawId)) ? rawId : Number(rawId);
+async function getId(params) {
+  const { id } = await params;
+  const n = Number(id);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-// 1. ดูข้อมูลสัตว์เลี้ยงรายตัว (คนทั่วไปดูได้)
+const notFound = () => NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยง" }, { status: 404 });
+
 export async function GET(request, { params }) {
   try {
-    const { id } = await Promise.resolve(params);
-    const petId = parseId(id);
+    const id = await getId(params);
+    if (!id) return notFound();
 
-    const pet = await prisma.pet.findUnique({
-      where: { id: petId },
-      include: { petType: true },
-    });
-
-    if (!pet) {
-      return NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยง" }, { status: 404 });
-    }
-
+    const pet = await prisma.pet.findUnique({ where: { id }, include: { petType: true } });
+    if (!pet) return notFound();
+    if (pet.status !== "AVAILABLE" && !(await isAdmin())) return notFound();
     return NextResponse.json(pet);
-  } catch (error) {
-    return NextResponse.json({ error: "เกิดข้อผิดพลาด: " + error.message }, { status: 500 });
+  } catch (e) {
+    console.error("GET Pet Error:", e);
+    return NextResponse.json({ error: "เกิดข้อผิดพลาด" }, { status: 500 });
   }
 }
 
-// 2. แก้ไขข้อมูลสัตว์เลี้ยง / เปลี่ยนสถานะ (เฉพาะแอดมิน)
 export async function PUT(request, { params }) {
+  const { error } = await requireAdmin();
+  if (error) return error;
   try {
-    // ตรวจสอบสิทธิ์แอดมิน
-    const { error } = await requireAdmin();
-    if (error) return error;
+    const id = await getId(params);
+    if (!id) return notFound();
 
-    const { id } = await Promise.resolve(params);
-    const petId = parseId(id);
-
-    const existingPet = await prisma.pet.findUnique({
-      where: { id: petId },
-    });
-
-    if (!existingPet) {
-      return NextResponse.json({ error: "ไม่พบข้อมูลสัตว์เลี้ยงในระบบ" }, { status: 404 });
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
     }
 
-    const body = await request.json();
-
-    // ตรวจสอบกฎการเปลี่ยนสถานะ (เช่น ออกจากสถานะ ADOPTED ต้องยืนยัน)
-    if (body.status && body.status !== existingPet.status) {
-      const err = transitionError(existingPet.status, body.status, body.confirmReopen);
-      if (err) {
-        return NextResponse.json({ error: err }, { status: 400 });
-      }
-    }
-
-    // ตรวจข้อมูลที่ส่งมาแก้ไข (partial: true ยอมให้อัปเดตเฉพาะบางฟิลด์ได้)
     const { errors, data } = parsePet(body, { partial: true });
-    if (Object.keys(errors).length > 0) {
-      return NextResponse.json({ error: "ข้อมูลไม่ถูกต้อง", details: errors }, { status: 400 });
+    if (Object.keys(errors).length) return NextResponse.json({ errors }, { status: 400 });
+
+    const current = await prisma.pet.findUnique({ where: { id } });
+    if (!current) return notFound();
+
+    const tErr = transitionError(current.status, data.status, body.confirmReopen);
+    if (tErr) return NextResponse.json({ errors: { status: tErr } }, { status: 400 });
+
+    const pet = await prisma.pet.update({ where: { id }, data });
+    return NextResponse.json(pet);
+  } catch (e) {
+    if (e?.code === "P2025") return notFound();
+    if (e?.code === "P2003") {
+      return NextResponse.json({ errors: { petTypeId: "ไม่พบประเภทสัตว์นี้" } }, { status: 400 });
     }
-
-    const updatedPet = await prisma.pet.update({
-      where: { id: petId },
-      data,
-      include: { petType: true },
-    });
-
-    return NextResponse.json(updatedPet);
-  } catch (error) {
-    console.error("PUT Pet Error:", error);
-    return NextResponse.json({ error: "อัปเดตข้อมูลล้มเหลว: " + error.message }, { status: 500 });
+    console.error("PUT Pet Error:", e);
+    return NextResponse.json({ error: "ไม่สามารถอัปเดตข้อมูลได้" }, { status: 500 });
   }
 }
 
-// 3. ลบสัตว์เลี้ยง (เฉพาะแอดมิน)
 export async function DELETE(request, { params }) {
+  const { error } = await requireAdmin();
+  if (error) return error;
   try {
-    // ตรวจสอบสิทธิ์แอดมิน
-    const { error } = await requireAdmin();
-    if (error) return error;
+    const id = await getId(params);
+    if (!id) return notFound();
 
-    const { id } = await Promise.resolve(params);
-    const petId = parseId(id);
-
-    await prisma.pet.delete({
-      where: { id: petId },
-    });
-
-    return NextResponse.json({ success: true, message: "ลบข้อมูลสัตว์เลี้ยงเรียบร้อยแล้ว" });
-  } catch (error) {
-    console.error("DELETE Pet Error:", error);
-    return NextResponse.json({ error: "ลบข้อมูลล้มเหลว: " + error.message }, { status: 500 });
+    await prisma.pet.delete({ where: { id } });
+    return NextResponse.json({ message: "ลบข้อมูลสำเร็จ" });
+  } catch (e) {
+    if (e?.code === "P2025") return notFound();
+    console.error("DELETE Pet Error:", e);
+    return NextResponse.json({ error: "ไม่สามารถลบข้อมูลได้" }, { status: 500 });
   }
 }

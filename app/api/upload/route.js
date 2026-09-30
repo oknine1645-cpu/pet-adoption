@@ -1,48 +1,55 @@
 import { NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
+import { requireAdmin } from "@/lib/auth-guard";
 
-// ตั้งค่าการเชื่อมต่อ Cloudinary
+export const runtime = "nodejs";
+
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-export async function POST(request) {
-  try {
-    const formData = await request.formData();
-    const file = formData.get("file");
+const MAX_BYTES = 4 * 1024 * 1024; // Vercel จำกัด body ประมาณ 4.5 MB
+const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
 
-    if (!file) {
-      return NextResponse.json({ error: "ไม่พบไฟล์ที่อัปโหลด" }, { status: 400 });
+export async function POST(request) {
+  const { error } = await requireAdmin();
+  if (error) return error;
+
+  try {
+    const form = await request.formData();
+    const file = form.get("file");
+
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "ไม่พบไฟล์" }, { status: 400 });
     }
 
-    // แปลงไฟล์เป็น Buffer เพื่อเตรียมส่งขึ้น Cloud
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    if (!ALLOWED.includes(file.type)) {
+      return NextResponse.json({ error: "รองรับเฉพาะ JPG, PNG, WebP" }, { status: 400 });
+    }
 
-    // อัปโหลดไฟล์ตรงเข้า Cloudinary ไปไว้ในโฟลเดอร์ pet-adoption
-    const uploadResult = await new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder: "pet-adoption",
-          resource_type: "auto",
-        },
-        (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
-        }
-      );
-      uploadStream.end(buffer);
+    if (file.size > MAX_BYTES) {
+      return NextResponse.json({ error: "ไฟล์ใหญ่เกิน 4 MB" }, { status: 413 });
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const result = await new Promise((resolve, reject) => {
+      cloudinary.uploader
+        .upload_stream(
+          {
+            folder: "pet-adoption",
+            resource_type: "image",
+            allowed_formats: ["jpg", "png", "webp"],
+          },
+          (err, res) => (err ? reject(err) : resolve(res))
+        )
+        .end(buffer);
     });
 
-    // ส่ง URL รูปภาพบน Cloudinary กลับไปบันทึกลงฐานข้อมูล
-    return NextResponse.json({ url: uploadResult.secure_url });
-  } catch (error) {
-    console.error("Cloudinary Upload Error:", error);
-    return NextResponse.json(
-      { error: "อัปโหลดรูปภาพไปยังคลาวด์ไม่สำเร็จ: " + error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ url: result.secure_url });
+  } catch (e) {
+    console.error("Upload Error:", e);
+    return NextResponse.json({ error: "อัปโหลดรูปไม่สำเร็จ" }, { status: 500 });
   }
 }
