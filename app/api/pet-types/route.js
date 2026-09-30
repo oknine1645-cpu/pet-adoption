@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import * as PrismaModule from "@/lib/prisma";
 
-// ป้องกัน Next.js แคชผลลัพธ์เดิม
+// ดึง prisma ได้ทั้งแบบ export default และ export const prisma
+const prisma = PrismaModule.default || PrismaModule.prisma;
+
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    if (!prisma || !prisma.petType) {
+      console.error("Prisma client or petType model not found");
+      return NextResponse.json([]);
+    }
+
     const types = await prisma.petType.findMany();
 
-    // จัดลำดับ: สุนัข -> แมว -> สัตว์อื่นเรียง ก-ฮ -> อื่นๆ ล่างสุด
     const priority = {
       "สุนัข": 1,
       "แมว": 2,
@@ -16,29 +22,27 @@ export async function GET() {
       "Cat": 2,
     };
 
-    const sortedTypes = [...types].sort((a, b) => {
-      const nameA = a.name ? a.name.trim() : "";
-      const nameB = b.name ? b.name.trim() : "";
+    const sortedTypes = [...(types || [])].sort((a, b) => {
+      const nameA = String(a?.name || "").trim();
+      const nameB = String(b?.name || "").trim();
 
       const isOtherA = nameA === "อื่นๆ" || nameA === "อื่น ๆ" || nameA.toLowerCase() === "other";
       const isOtherB = nameB === "อื่นๆ" || nameB === "อื่น ๆ" || nameB.toLowerCase() === "other";
 
-      // ดัน "อื่นๆ" ไปไว้ท้ายสุดเสมอ
       if (isOtherA) return 1;
       if (isOtherB) return -1;
 
-      // จัด สุนัข และ แมว ขึ้นก่อน
       const pA = priority[nameA] || 99;
       const pB = priority[nameB] || 99;
       if (pA !== pB) return pA - pB;
 
-      // ที่เหลือเรียงตาม ก-ฮ
       return nameA.localeCompare(nameB, "th");
     });
 
     return NextResponse.json(sortedTypes);
   } catch (error) {
     console.error("Fetch pet types error:", error);
-    return NextResponse.json({ error: "Failed to fetch pet types" }, { status: 500 });
+    // ส่ง array เปล่าแทนการส่ง status 500 เพื่อไม่ให้หน้าเว็บล่มทั้งหน้า
+    return NextResponse.json([]);
   }
 }
