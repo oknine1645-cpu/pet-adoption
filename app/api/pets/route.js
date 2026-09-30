@@ -74,7 +74,7 @@ export async function POST(request) {
       return NextResponse.json({ error: firstError, errors }, { status: 400 });
     }
 
-    // 4. บันทึกลง Prisma โดยระบุเฉพาะฟิลด์ที่มีใน Schema จริง (ป้องกันปัญหา Argument เกิน)
+    // 4. บันทึกลง Prisma เฉพาะคอลัมน์ที่มีอยู่จริงในฐานข้อมูล
     const pet = await prisma.pet.create({
       data: {
         name: data.name,
@@ -82,12 +82,9 @@ export async function POST(request) {
         status: data.status,
         gender: data.gender,
         ageMonths: data.ageMonths,
-        weightKg: data.weightKg,
-        breed: data.breed,
-        description: data.description,
-        healthNote: data.healthNote,
-        imageUrl: data.imageUrl,
-        arrivedDate: data.arrivedDate,
+        breed: data.breed || null,
+        description: data.description || null,
+        imageUrl: data.imageUrl || null,
       },
       include: { petType: true },
     });
