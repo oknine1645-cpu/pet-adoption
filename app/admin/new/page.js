@@ -44,7 +44,6 @@ export default function NewPetPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // จำกัดเฉพาะไฟล์รูปภาพ
     if (!file.type.startsWith("image/")) {
       setError("กรุณาเลือกไฟล์ที่เป็นรูปภาพเท่านั้น (JPG, PNG, WEBP)");
       return;
@@ -117,6 +116,7 @@ export default function NewPetPage() {
       router.refresh();
     } catch (err) {
       setError(err.message);
+    } finally {
       setLoading(false);
     }
   }
@@ -182,7 +182,6 @@ export default function NewPetPage() {
             </label>
 
             <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-              {/* ภาพตัวอย่าง (Preview) */}
               <div
                 style={{
                   width: 90,
@@ -209,7 +208,6 @@ export default function NewPetPage() {
                 )}
               </div>
 
-              {/* ปุ่มเลือกไฟล์จากเครื่อง */}
               <div style={{ flex: 1 }}>
                 <input
                   type="file"
