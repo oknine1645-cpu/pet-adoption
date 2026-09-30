@@ -5,6 +5,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 
+// อ่าน response แบบปลอดภัย: ถ้า body ว่างหรือไม่ใช่ JSON จะไม่พัง
+async function readJsonSafe(res) {
+  const raw = await res.text();
+  let data = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {}
+  return { raw, data };
+}
+
 // ฟังก์ชันแปลงชื่อประเภทสัตว์ 2 ภาษา
 function formatPetTypeName(name, lang) {
   if (!name) return "-";
@@ -94,10 +104,12 @@ export default function NewPetPage() {
       try {
         const res = await fetch("/api/pet-types");
         if (res.ok) {
-          const data = await res.json();
-          setTypes(data);
-          if (data.length > 0) {
-            setForm((prev) => ({ ...prev, typeId: String(data[0].id) }));
+          const { data } = await readJsonSafe(res);
+          if (Array.isArray(data)) {
+            setTypes(data);
+            if (data.length > 0) {
+              setForm((prev) => ({ ...prev, typeId: String(data[0].id) }));
+            }
           }
         }
       } catch (err) {
@@ -146,13 +158,16 @@ export default function NewPetPage() {
         body: formData,
       });
 
-      const data = await res.json();
-      if (res.ok) {
+      const { raw, data } = await readJsonSafe(res);
+
+      if (res.ok && data?.url) {
         setForm((prev) => ({ ...prev, imageUrl: data.url }));
       } else {
-        setError(data.error || text.uploadError);
+        console.error("POST /api/upload failed:", res.status, res.url, raw);
+        setError(data?.error || `${text.uploadError} (HTTP ${res.status})`);
       }
     } catch (err) {
+      console.error("Upload error:", err);
       setError(text.serverUploadError);
     } finally {
       setUploading(false);
@@ -198,10 +213,15 @@ export default function NewPetPage() {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      // อ่านแบบปลอดภัย: body ว่างจะไม่ทำให้ "Unexpected end of JSON input"
+      const { raw, data } = await readJsonSafe(res);
 
       if (!res.ok) {
-        throw new Error(data.error || text.saveError);
+        console.error("POST /api/pets failed:", res.status, res.url, raw);
+        const fieldErrors = data?.errors ? Object.values(data.errors).join(", ") : "";
+        throw new Error(
+          data?.error || fieldErrors || `${text.saveError} (HTTP ${res.status})`
+        );
       }
 
       router.push("/admin");
