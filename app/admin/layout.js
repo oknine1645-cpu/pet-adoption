@@ -2,6 +2,9 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
+// 1. บังคับให้หน้า /admin ทั้งหมดเรนเดอร์แบบ Dynamic ต่อ request เสมอ (ห้ามทำเป็น Static)
+export const dynamic = "force-dynamic";
+
 // ป้องกันไม่ให้ Search Engine (เช่น Google) ทำการเก็บดัชนี (Index) หน้าแอดมิน
 export const metadata = {
   robots: {
@@ -16,8 +19,15 @@ export default async function AdminLayout({ children }) {
   try {
     session = await auth();
   } catch (err) {
+    // ปล่อยผ่านสัญญาณ Dynamic Server Usage และ Next Redirect ให้ Next.js ทำงานได้ตามปกติ
+    if (
+      err?.digest === "DYNAMIC_SERVER_USAGE" ||
+      err?.message?.includes("Dynamic server usage") ||
+      err?.digest?.startsWith("NEXT_REDIRECT")
+    ) {
+      throw err;
+    }
     console.error("AdminLayout Auth Error:", err);
-    redirect("/login");
   }
 
   // 1. กรณีที่ยังไม่ได้ล็อกอินเลย ให้ส่งไปหน้าล็อกอิน
@@ -79,7 +89,7 @@ export default async function AdminLayout({ children }) {
               style={{
                 padding: "10px 18px",
                 backgroundColor: "#f1f5f9",
-                border: "1px solid #cbd5e1",
+                border: "1.5px solid #cbd5e1",
                 color: "#334155",
                 borderRadius: 10,
                 fontSize: 13,

@@ -6,6 +6,16 @@ import Link from "next/link";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useLanguage } from "@/context/LanguageContext";
 
+// ฟังก์ชันช่วยอ่าน JSON อย่างปลอดภัย ป้องกัน Unexpected end of JSON input
+async function readJsonSafe(res) {
+  try {
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 export default function AdminPage() {
   const { lang, t, formatGender, formatStatus, formatAge } = useLanguage();
   const [pets, setPets] = useState([]);
@@ -23,15 +33,20 @@ export default function AdminPage() {
     }, 3500);
   }
 
+  // ดึงข้อมูลสัตว์เลี้ยงทั้งหมด
   async function fetchPets() {
     try {
       const res = await fetch("/api/pets?status=ALL");
       if (res.ok) {
-        const data = await res.json();
-        setPets(data);
+        const data = await readJsonSafe(res);
+        setPets(Array.isArray(data) ? data : []);
+      } else {
+        const errData = await readJsonSafe(res);
+        console.error("fetchPets error response:", errData);
       }
     } catch (err) {
-      showToast("Load error", "error");
+      console.error("fetchPets connection error:", err);
+      showToast(lang === "th" ? "โหลดข้อมูลไม่สำเร็จ" : "Load error", "error");
     } finally {
       setLoading(false);
     }
@@ -41,6 +56,7 @@ export default function AdminPage() {
     fetchPets();
   }, []);
 
+  // ยืนยันการลบข้อมูลสัตว์เลี้ยง
   async function handleDeleteConfirm() {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -52,12 +68,24 @@ export default function AdminPage() {
 
       if (res.ok) {
         setPets((prev) => prev.filter((p) => p.id !== deleteTarget.id));
-        showToast(lang === "th" ? `ลบข้อมูล "${deleteTarget.name}" สำเร็จ` : `Deleted "${deleteTarget.name}" successfully`);
+        showToast(
+          lang === "th"
+            ? `ลบข้อมูล "${deleteTarget.name}" สำเร็จ`
+            : `Deleted "${deleteTarget.name}" successfully`
+        );
       } else {
-        showToast("Delete failed", "error");
+        const errData = await readJsonSafe(res);
+        showToast(
+          errData?.error || (lang === "th" ? "ลบข้อมูลไม่สำเร็จ" : "Delete failed"),
+          "error"
+        );
       }
     } catch (err) {
-      showToast("Connection error", "error");
+      console.error("Delete connection error:", err);
+      showToast(
+        lang === "th" ? "เกิดข้อผิดพลาดในการเชื่อมต่อ" : "Connection error",
+        "error"
+      );
     } finally {
       setIsDeleting(false);
       setDeleteTarget(null);
