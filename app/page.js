@@ -16,6 +16,24 @@ function formatAge(months, lang, t) {
     : `${years} ${t("years")} ${remaining} ${t("months")}`;
 }
 
+// ฟังก์ชันแปลงชื่อประเภทสัตว์ 2 ภาษา
+function formatPetTypeName(name, lang) {
+  if (!name) return "-";
+  if (lang !== "en") return name;
+
+  const dict = {
+    "สุนัข": "Dogs",
+    "แมว": "Cats",
+    "กระต่าย": "Rabbits",
+    "นก": "Birds",
+    "หนูแฮมสเตอร์": "Hamsters",
+    "อื่นๆ": "Others",
+    "อื่น ๆ": "Others",
+  };
+
+  return dict[name.trim()] || name;
+}
+
 export default function HomePage() {
   const { lang, t, formatGender } = useLanguage();
   const [pets, setPets] = useState([]);
@@ -337,7 +355,7 @@ export default function HomePage() {
                   boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
                 }}
               >
-                {tp.name}
+                {formatPetTypeName(tp.name, lang)}
               </button>
             ))}
 
@@ -602,7 +620,7 @@ export default function HomePage() {
                           borderRadius: 6,
                         }}
                       >
-                        {pet.petType?.name || "Pet"}
+                        {formatPetTypeName(pet.petType?.name, lang) || "Pet"}
                       </span>
                       {pet.breed && (
                         <span
