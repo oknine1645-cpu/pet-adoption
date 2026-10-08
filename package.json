@@ -13,8 +13,11 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
+    "@nestjs/mapped-types": "^12.0.0",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
     "cloudinary": "^2.11.0",
     "next": "^15.1.0",
     "next-auth": "^5.0.0-beta.32",

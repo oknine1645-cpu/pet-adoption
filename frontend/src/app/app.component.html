@@ -1,0 +1,43 @@
+<!-- Navbar สไตล์ Vercel (เต็มความกว้างจอ) -->
+<header style="background: #ffffff; border-bottom: 1px solid #f1f5f9; position: sticky; top: 0; z-index: 50; width: 100%; box-sizing: border-box;">
+  <div style="max-width: 1240px; margin: 0 auto; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center;">
+    
+    <!-- โลโก้บ้านพักใจ -->
+    <a routerLink="/" style="display: flex; align-items: center; gap: 8px; text-decoration: none;">
+      <span style="font-size: 22px;">🏡</span>
+      <span style="font-size: 18px; font-weight: 800; color: #15803d; letter-spacing: -0.3px;">บ้านพักใจ</span>
+    </a>
+
+    <!-- เมนูด้านขวา -->
+    <nav style="display: flex; gap: 12px; align-items: center;">
+      <a
+        routerLink="/"
+        style="padding: 6px 16px; border-radius: 9999px; font-size: 13px; font-weight: 600; text-decoration: none; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; display: flex; align-items: center; gap: 4px;"
+      >
+        💛 ร่วมบริจาค
+      </a>
+
+      <a
+        routerLink="/"
+        style="padding: 6px 10px; font-size: 13.5px; font-weight: 500; text-decoration: none; color: #64748b; transition: color 0.2s;"
+        onmouseover="this.style.color='#15803d'"
+        onmouseout="this.style.color='#64748b'"
+      >
+        เกี่ยวกับศูนย์
+      </a>
+
+      <a
+        routerLink="/admin"
+        style="padding: 6px 18px; border-radius: 9999px; font-size: 13px; font-weight: 700; text-decoration: none; color: #15803d; background: #dcfce7; border: 1px solid #bbf7d0; display: flex; align-items: center; gap: 5px; transition: 0.2s;"
+        onmouseover="this.style.background='#bbf7d0'"
+        onmouseout="this.style.background='#dcfce7'"
+      >
+        🔒 พื้นที่เจ้าหน้าที่
+      </a>
+    </nav>
+
+  </div>
+</header>
+
+<!-- จุดแสดงผลหน้าเว็บ (ห้ามใส่ div ครอบบรรทัดนี้) -->
+<router-outlet></router-outlet>

@@ -1,0 +1,13 @@
+<header style="background: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center;">
+  <a routerLink="/" style="font-size: 20px; font-weight: 800; color: #0f172a; text-decoration: none;">
+    🐾 Pet Adoption
+  </a>
+  <nav style="display: flex; gap: 16px;">
+    <a routerLink="/" style="text-decoration: none; color: #475569; font-weight: 600;">สัตว์เลี้ยงทั้งหมด</a>
+    <a routerLink="/admin" style="text-decoration: none; color: #16a34a; font-weight: 700;">⚙️ จัดการระบบ (Admin)</a>
+  </nav>
+</header>
+
+<main style="max-width: 1000px; margin: 0 auto; padding: 24px 16px;">
+  <router-outlet></router-outlet>
+</main>
