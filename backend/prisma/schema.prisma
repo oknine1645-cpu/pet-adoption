@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PetType {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  pets      Pet[]
+}
+
+model Pet {
+  id          Int       @id @default(autoincrement())
+  name        String
+  petTypeId   Int
+  petType     PetType   @relation(fields: [petTypeId], references: [id])
+  status      String    @default("AVAILABLE")
+  gender      String
+  ageMonths   Int
+  weightKg    Float?
+  healthNote  String?
+  arrivedDate DateTime?
+  breed       String?
+  description String?
+  imageUrl    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
